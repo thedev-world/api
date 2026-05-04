@@ -1,0 +1,66 @@
+version: "3"
+
+vars:
+  COMPOSE: docker compose
+  SERVICE_API: api
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  test:
+    desc: >
+      Pytest in the API container. Pass pytest args after --, e.g.
+      task test -- tests/routers/test_health.py::test_health_returns_ok_when_database_check_succeeds
+      or task test -- tests/services/test_health_service.py -vv
+    cmds:
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && pytest {{.CLI_ARGS}}"'
+
+  format:
+    desc: Ruff format in the API container (app, alembic, tests)
+    cmds:
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff format app alembic tests"'
+
+  lint:
+    desc: Ruff check in the API container
+    cmds:
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff check app alembic tests"'
+
+  lint:fix:
+    desc: Ruff check --fix in the API container
+    cmds:
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff check --fix app alembic tests"'
+
+  build:
+    desc: Build images
+    cmds:
+      - "{{.COMPOSE}} build"
+
+  dev:
+    desc: Postgres, Redis, API, Celery worker
+    cmds:
+      - "{{.COMPOSE}} up"
+
+  down:
+    desc: Stop containers
+    cmds:
+      - "{{.COMPOSE}} down"
+
+  migrate-create:
+    desc: "Alembic autogenerate (optional MSG=...)"
+    vars:
+      MESSAGE: '{{.MSG | default "migration"}}'
+    cmds:
+      - '{{.COMPOSE}} run --rm {{.SERVICE_API}} alembic revision --autogenerate -m "{{.MESSAGE}}"'
+
+  migrate-up:
+    desc: Alembic upgrade head
+    cmds:
+      - "{{.COMPOSE}} run --rm {{.SERVICE_API}} alembic upgrade head"
+
+  migrate-down:
+    desc: Alembic downgrade one revision
+    cmds:
+      - "{{.COMPOSE}} run --rm {{.SERVICE_API}} alembic downgrade -1"
