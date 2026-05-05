@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from app.domain.datetime_github import github_account_age_full_years
 from app.domain.github_inputs import GithubScoreInputs
 
 FOLLOWERS_COUNT_CAP_FOR_XP = 500
@@ -45,20 +46,27 @@ def stars_after_single_repo_cap(stars_per_repo: tuple[int, ...]) -> tuple[int, i
     return (total_raw, capped_total)
 
 
-def calculate_xp(inputs: GithubScoreInputs) -> tuple[int, XpBreakdownContribution]:
-    _, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
-
-    b_commits = inputs.commits_alltime * 10
-    b_prs = inputs.prs_contributions_alltime * 30
-    b_reviews = inputs.reviews_alltime * 15
-    b_stars = stars_capped * 50
-    b_forks = inputs.forks_received * 40
-    followers_for_xp = min(inputs.followers, FOLLOWERS_COUNT_CAP_FOR_XP)
+def xp_breakdown_from_persisted_components(
+    *,
+    commits_alltime: int,
+    prs_contributions_alltime: int,
+    reviews_alltime: int,
+    stars_received_capped: int,
+    forks_received: int,
+    followers: int,
+    years_on_github: int,
+) -> XpBreakdownContribution:
+    """XP slice from stored scalars (stars cap already applied upstream)."""
+    b_commits = commits_alltime * 10
+    b_prs = prs_contributions_alltime * 30
+    b_reviews = reviews_alltime * 15
+    b_stars = stars_received_capped * 50
+    b_forks = forks_received * 40
+    followers_for_xp = min(followers, FOLLOWERS_COUNT_CAP_FOR_XP)
     b_follow = followers_for_xp * 20
-    b_years = inputs.years_on_github * 200
+    b_years = years_on_github * 200
 
-    xp = b_commits + b_prs + b_reviews + b_stars + b_forks + b_follow + b_years
-    breakdown = XpBreakdownContribution(
+    return XpBreakdownContribution(
         from_commits=b_commits,
         from_pull_requests=b_prs,
         from_reviews=b_reviews,
@@ -66,6 +74,31 @@ def calculate_xp(inputs: GithubScoreInputs) -> tuple[int, XpBreakdownContributio
         from_forks=b_forks,
         from_followers=b_follow,
         from_tenure=b_years,
+    )
+
+
+def calculate_xp(inputs: GithubScoreInputs) -> tuple[int, XpBreakdownContribution]:
+    _, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
+
+    years = github_account_age_full_years(inputs.account_created_at)
+    breakdown = xp_breakdown_from_persisted_components(
+        commits_alltime=inputs.commits_alltime,
+        prs_contributions_alltime=inputs.prs_contributions_alltime,
+        reviews_alltime=inputs.reviews_alltime,
+        stars_received_capped=stars_capped,
+        forks_received=inputs.forks_received,
+        followers=inputs.followers,
+        years_on_github=years,
+    )
+
+    xp = (
+        breakdown.from_commits
+        + breakdown.from_pull_requests
+        + breakdown.from_reviews
+        + breakdown.from_stars
+        + breakdown.from_forks
+        + breakdown.from_followers
+        + breakdown.from_tenure
     )
     return xp, breakdown
 
@@ -87,10 +120,11 @@ def get_level(xp: int) -> int:
 
 def get_xp_progress(xp: int) -> XpProgress:
     level = get_level(xp)
-    xp_current_level = xp_for_level(level)
+    # Level 1 spans [0, xp_for_level(2)); xp_for_level(1) is not a gameplay floor for get_level().
+    xp_floor = 0 if level == 1 else xp_for_level(level)
     xp_next_level = xp_for_level(level + 1)
-    span = xp_next_level - xp_current_level
-    xp_in_level = xp - xp_current_level
+    span = xp_next_level - xp_floor
+    xp_in_level = xp - xp_floor
     if span <= 0:
         pct = 100
     else:
@@ -118,14 +152,14 @@ def get_cell_count(xp: int) -> int:
 
 def get_player_class(level: int) -> PlayerClass:
     classes: list[tuple[int, str, str]] = [
-        (1, "Seedling", "Tu plantes les premières graines."),
-        (5, "Builder", "Tu construis, commit après commit."),
-        (10, "Crafter", "Ton travail commence à résonner."),
-        (20, "Architect", "Tu shapes des projets entiers."),
-        (35, "Maintainer", "La communauté compte sur toi."),
-        (55, "Legend", "Ton impact dépasse ton île."),
-        (80, "Sovereign", "Tu gouvernes ton territoire."),
-        (100, "Founder", "Tu as posé les fondations du monde."),
+        (1, "Seedling", "It compiles. That's something."),
+        (5, "Builder", "You build, it breaks, you rebuild."),
+        (10, "Crafter", "People read your code without crying."),
+        (20, "Architect", "You open issues on repos you didn't write."),
+        (35, "Maintainer", "You merge PRs on Sundays. On purpose."),
+        (55, "Legend", "People learned to code on your code."),
+        (80, "Sovereign", "You deprecate APIs. People adapt."),
+        (100, "Founder", "Someone forked your thing. Good. That was the point."),
     ]
     current = classes[0]
     for min_level, name, phrase in classes:

@@ -16,7 +16,7 @@ tasks:
       task test -- tests/routers/test_health.py::test_health_returns_ok_when_database_check_succeeds
       or task test -- tests/services/test_health_service.py -vv
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && pytest {{.CLI_ARGS}}"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app pytest {{.CLI_ARGS}}"'
 
   format:
     desc: Ruff format in the API container (app, alembic, tests)
@@ -64,3 +64,21 @@ tasks:
     desc: Alembic downgrade one revision
     cmds:
       - "{{.COMPOSE}} run --rm {{.SERVICE_API}} alembic downgrade -1"
+
+  shell:
+    desc: >
+      POSIX shell in /app after pip install .[dev]; PYTHONPATH set. Run e.g.
+      ``python scripts/repl_db_example.py <login> --hours-ago 7``.
+      Prompt ``#`` is the shell; ``>>>`` means Python REPL (``exit()`` then retry, or ``task shell:python``).
+    cmds:
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && export PYTHONPATH=/app && exec sh"'
+
+  shell:python:
+    desc: Plain Python REPL (>>>); not for ``python script.py`` (use the shell task).
+    cmds:
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app python"'
+
+  shell:ipython:
+    desc: Same env as shell, with IPython.
+    cmds:
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app python -m IPython"'

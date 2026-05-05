@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -9,4 +10,4 @@ class GithubScoreInputs:
     stars_per_repo: tuple[int, ...]
     forks_received: int
     followers: int
-    years_on_github: int
+    account_created_at: datetime

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from app.domain.github_inputs import GithubScoreInputs
 from app.domain.scoring import (
@@ -42,7 +44,7 @@ def test_xp_minimum_inputs() -> None:
         stars_per_repo=(),
         forks_received=0,
         followers=0,
-        years_on_github=0,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
     )
     xp, breakdown = calculate_xp(inp)
     assert xp == 0
@@ -64,6 +66,8 @@ def test_level_and_cells_zero_xp_anchor() -> None:
 def test_xp_progress_zero_is_level_one_percent_zero() -> None:
     prog = get_xp_progress(0)
     assert prog.level == 1
+    assert prog.xp_in_level == 0
+    assert prog.xp_needed == xp_for_level(2)
     assert prog.percent == 0
 
 
@@ -87,7 +91,7 @@ def test_followers_cap_for_xp_breakdown() -> None:
         stars_per_repo=(),
         forks_received=0,
         followers=600,
-        years_on_github=0,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
     )
     xp, breakdown = calculate_xp(inp)
     assert breakdown.from_followers == 500 * 20

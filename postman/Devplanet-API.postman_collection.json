@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "Devplanet API",
-    "description": "Endpoints for devplanet-api (FastAPI): root, health, GitHub public score.",
+    "description": "Endpoints for devplanet-api (FastAPI): root, health, persisted user snapshot, POST /me/sync, GitHub public score.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -41,6 +41,50 @@
             "header": [],
             "url": "{{baseUrl}}/api/v1/health",
             "description": "Liveness; requires DB. Returns 503 if database check fails."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Me (sync)",
+      "item": [
+        {
+          "name": "POST /api/v1/me/sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"github_login\": \"{{githubUsername}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/v1/me/sync",
+            "description": "Persists aggregated score for the given GitHub login (no OAuth yet — anyone can call it). One GET /users to resolve numeric id + canonical login; then heavy fetch or incremental delta. Same response shape as GET …/github/:user/score when sync ran, plus sync_performed / first_sync / progress. Cooldown returns a minimal JSON when under 6h since last_sync_at."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User (persisted)",
+      "item": [
+        {
+          "name": "GET /api/v1/user/{{githubUsername}}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/user/{{githubUsername}}",
+            "description": "Returns persisted aggregates + xp_brut + player_class (same name/phrase semantics as GET …/github/:user/score). Case-insensitive match in DB (unique lower index). 404 if never synced."
           },
           "response": []
         }

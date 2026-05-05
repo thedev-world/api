@@ -6,6 +6,7 @@ from typing import Any, Protocol
 import httpx
 
 from app.config import Settings
+from app.domain.datetime_github import parse_github_datetime
 from app.domain.github_inputs import GithubScoreInputs
 
 
@@ -53,6 +54,96 @@ class GitHubClient(GitHubStatsFetcher):
             h["Authorization"] = f"Bearer {self._settings.github_token}"
         return h
 
+    async def fetch_public_user_profile(self, login: str) -> dict[str, Any]:
+        login = login.strip()
+        if not login:
+            raise ValueError("GitHub login cannot be empty")
+
+        base = self._settings.github_api_base.rstrip("/")
+        async with httpx.AsyncClient(
+            base_url=base,
+            headers=self._headers(),
+            timeout=httpx.Timeout(45.0),
+        ) as client:
+            return await self._fetch_user_profile(client, login)
+
+    async def contributions_totals_between(
+        self,
+        login: str,
+        range_from: datetime,
+        range_to: datetime,
+    ) -> tuple[int, int, int]:
+        """Sum contribution counts for [range_from, range_to] with per-calendar-year GraphQL calls.
+
+        GitHub clamps ``from`` to within one year of ``to`` on a single query; slicing avoids loss.
+        """
+        login = login.strip()
+        if not login:
+            raise ValueError("GitHub login cannot be empty")
+        if range_from > range_to:
+            return (0, 0, 0)
+
+        base = self._settings.github_api_base.rstrip("/")
+        async with httpx.AsyncClient(
+            base_url=base,
+            headers=self._headers(),
+            timeout=httpx.Timeout(45.0),
+        ) as client:
+            total_commits = 0
+            total_prs = 0
+            total_reviews = 0
+            for year in range(range_from.year, range_to.year + 1):
+                chunk_from = max(range_from, datetime(year, 1, 1, tzinfo=UTC))
+                chunk_to = min(range_to, datetime(year, 12, 31, 23, 59, 59, tzinfo=UTC))
+                if chunk_from > chunk_to:
+                    continue
+                dc, dpr, drv = await self._contribution_totals_for_range(
+                    client, login, chunk_from, chunk_to
+                )
+                total_commits += dc
+                total_prs += dpr
+                total_reviews += drv
+            return (total_commits, total_prs, total_reviews)
+
+    async def fetch_owner_repo_star_fork_totals(self, login: str) -> tuple[tuple[int, ...], int]:
+        login = login.strip()
+        if not login:
+            raise ValueError("GitHub login cannot be empty")
+
+        base = self._settings.github_api_base.rstrip("/")
+        async with httpx.AsyncClient(
+            base_url=base,
+            headers=self._headers(),
+            timeout=httpx.Timeout(45.0),
+        ) as client:
+            return await self._repos_aggregates(client, login)
+
+    async def _contribution_totals_for_range(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+        chunk_from: datetime,
+        chunk_to: datetime,
+    ) -> tuple[int, int, int]:
+        payload = await self._graphql_request(
+            client,
+            GRAPHQL_SCORE_SLICE,
+            {
+                "login": login,
+                "from": _github_datetime(chunk_from),
+                "to": _github_datetime(chunk_to),
+            },
+        )
+        viewer_user = payload.get("user") if isinstance(payload, dict) else None
+        if viewer_user is None:
+            raise GitHubUserNotFoundError(login)
+        cc = viewer_user.get("contributionsCollection") or {}
+        return (
+            int(cc.get("totalCommitContributions", 0) or 0),
+            int(cc.get("totalPullRequestContributions", 0) or 0),
+            int(cc.get("totalPullRequestReviewContributions", 0) or 0),
+        )
+
     async def fetch_score_inputs(self, login: str) -> GithubScoreInputs:
         login = login.strip()
         if not login:
@@ -65,7 +156,7 @@ class GitHubClient(GitHubStatsFetcher):
             timeout=httpx.Timeout(45.0),
         ) as client:
             profile = await self._fetch_user_profile(client, login)
-            created_at = _parse_github_datetime(profile["created_at"])
+            created_at = parse_github_datetime(profile["created_at"])
 
             commits, prs, reviews = await self._contributions_year_slices(client, login, created_at)
 
@@ -78,7 +169,7 @@ class GitHubClient(GitHubStatsFetcher):
                 stars_per_repo=stars_per_repo,
                 forks_received=forks_received,
                 followers=int(profile.get("followers", 0)),
-                years_on_github=_full_years_since(created_at),
+                account_created_at=created_at,
             )
 
     async def _fetch_user_profile(self, client: httpx.AsyncClient, login: str) -> dict[str, Any]:
@@ -108,22 +199,15 @@ class GitHubClient(GitHubStatsFetcher):
             if chunk_from > chunk_to:
                 continue
 
-            payload = await self._graphql_request(
+            commits, prs, reviews = await self._contribution_totals_for_range(
                 client,
-                GRAPHQL_SCORE_SLICE,
-                {
-                    "login": login,
-                    "from": _github_datetime(chunk_from),
-                    "to": _github_datetime(chunk_to),
-                },
+                login,
+                chunk_from,
+                chunk_to,
             )
-            viewer_user = payload.get("user") if isinstance(payload, dict) else None
-            if viewer_user is None:
-                raise GitHubUserNotFoundError(login)
-            cc = viewer_user.get("contributionsCollection") or {}
-            total_commits += int(cc.get("totalCommitContributions", 0) or 0)
-            total_prs += int(cc.get("totalPullRequestContributions", 0) or 0)
-            total_reviews += int(cc.get("totalPullRequestReviewContributions", 0) or 0)
+            total_commits += commits
+            total_prs += prs
+            total_reviews += reviews
 
         return total_commits, total_prs, total_reviews
 
@@ -203,25 +287,8 @@ class GitHubClient(GitHubStatsFetcher):
             raise GitHubAPIError(f"REST HTTP {r.status_code}: {r.text}")
 
 
-def _parse_github_datetime(value: str) -> datetime:
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    dt = datetime.fromisoformat(value)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
-
-
 def _github_datetime(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     s = dt.astimezone(UTC).isoformat()
     return s.replace("+00:00", "Z")
-
-
-def _full_years_since(created_at: datetime) -> int:
-    now = datetime.now(tz=UTC)
-    if created_at > now:
-        return 0
-    years = (now - created_at).days // 365
-    return max(0, int(years))

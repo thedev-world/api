@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.datetime_github import github_account_age_full_years
 from app.services.github_score_service import GithubPublicScoreSnapshot
 
 
@@ -67,6 +68,11 @@ def public_score_response_from(snapshot: GithubPublicScoreSnapshot) -> GithubPub
     b = snapshot.xp_breakdown
     p = snapshot.xp_progress
     cls = snapshot.player_class
+    repo_count = (
+        snapshot.owners_repos_count_override
+        if snapshot.owners_repos_count_override is not None
+        else len(inp.stars_per_repo)
+    )
     return GithubPublicScoreResponse(
         login=snapshot.login,
         xp=snapshot.xp,
@@ -93,8 +99,8 @@ def public_score_response_from(snapshot: GithubPublicScoreSnapshot) -> GithubPub
             reviews_alltime=inp.reviews_alltime,
             forks_received_on_owned_repos=inp.forks_received,
             followers=inp.followers,
-            years_on_github=inp.years_on_github,
-            owners_repos_count_non_fork=len(inp.stars_per_repo),
+            years_on_github=github_account_age_full_years(inp.account_created_at),
+            owners_repos_count_non_fork=repo_count,
             stars_received_raw_total=snapshot.stars_raw_total,
             stars_received_capped_total=snapshot.stars_capped_total,
         ),

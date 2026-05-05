@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from app.domain.github_inputs import GithubScoreInputs
 from app.main import app
@@ -15,7 +17,7 @@ class _DummyFetcher:
             stars_per_repo=(5,),
             forks_received=2,
             followers=10,
-            years_on_github=2,
+            account_created_at=datetime(2018, 6, 1, tzinfo=UTC),
         )
 
 
