@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.database import engine
 from app.routers.health import router as health_router
+from app.routers.score_github import router as score_github_router
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/api/v1")
+app.include_router(score_github_router, prefix="/api/v1")
 
 
 @app.get("/")

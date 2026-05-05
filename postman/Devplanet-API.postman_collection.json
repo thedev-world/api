@@ -1,0 +1,65 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Devplanet API",
+    "description": "Endpoints for devplanet-api (FastAPI): root, health, GitHub public score.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "githubUsername",
+      "value": "octocat"
+    }
+  ],
+  "item": [
+    {
+      "name": "Root",
+      "item": [
+        {
+          "name": "GET /",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/",
+            "description": "Service identity."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/v1/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/health",
+            "description": "Liveness; requires DB. Returns 503 if database check fails."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GitHub score",
+      "item": [
+        {
+          "name": "GET /api/v1/github/:username/score",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/github/{{githubUsername}}/score",
+            "description": "Public score by GitHub username (REST + GraphQL on server). Optional: set GITHUB_TOKEN in server .env for higher rate limits—not a Postman header unless you add a gateway."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
