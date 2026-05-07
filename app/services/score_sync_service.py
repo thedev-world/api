@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -118,7 +119,11 @@ class ScoreSyncService:
         last = last.astimezone(UTC)
         range_from = min(last + timedelta(seconds=1), now)
 
-        dc, dpr, drv = await self._github.contributions_totals_between(trimmed, range_from, now)
+        (dc, dpr, drv), profile, (stars_per_repo, forks_received) = await asyncio.gather(
+            self._github.contributions_totals_between(trimmed, range_from, now),
+            self._github.fetch_public_user_profile(trimmed),
+            self._github.fetch_owner_repo_star_fork_totals(trimmed),
+        )
         logger.debug(
             "incremental delta for %r range=[%s → %s]: commits=%d prs=%d reviews=%d",
             trimmed,
@@ -129,11 +134,7 @@ class ScoreSyncService:
             drv,
         )
 
-        profile = await self._github.fetch_public_user_profile(trimmed)
         created_at = parse_github_datetime(str(profile["created_at"]))
-        stars_per_repo, forks_received = await self._github.fetch_owner_repo_star_fork_totals(
-            trimmed,
-        )
         stars_raw, stars_capped = stars_after_single_repo_cap(stars_per_repo)
 
         row.commits_alltime += dc
