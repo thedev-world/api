@@ -4,9 +4,8 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 from app.domain.scoring import get_cell_count, get_xp_progress
-from app.schemas.score import XpProgressSchema
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
 from tests.factories.developer_factory import make_developer
 
@@ -17,15 +16,6 @@ def _patch_now(fixed_now: datetime) -> MagicMock:
     mock_dm.UTC = UTC
     mock_dm.timedelta = timedelta
     return mock_dm
-
-
-def _xp_progress_schema(progress: object) -> XpProgressSchema:
-    return XpProgressSchema(
-        level=progress.level,
-        xp_in_level=progress.xp_in_level,
-        xp_needed=progress.xp_needed,
-        percent=progress.percent,
-    )
 
 
 @pytest.mark.asyncio
@@ -58,7 +48,7 @@ async def test_sync_cooldown_returns_me_sync_cooldown() -> None:
 async def test_first_sync_creates_and_commits() -> None:
     fixed_now = datetime(2031, 2, 1, tzinfo=UTC)
     anchor = datetime(2015, 1, 1, tzinfo=UTC)
-    inputs = GithubScoreInputs(
+    inputs = GitHubScoreInputs(
         commits_alltime=10,
         prs_contributions_alltime=0,
         reviews_alltime=0,
@@ -86,8 +76,8 @@ async def test_first_sync_creates_and_commits() -> None:
         assert isinstance(out, MeSyncPerformed)
         assert out.first_sync is True
         assert out.progress is None
-        assert out.payload.login == "bob"
-        assert out.payload.xp >= 1
+        assert out.snapshot.login == "bob"
+        assert out.snapshot.xp >= 1
         repo.create.assert_called_once()
         db.commit.assert_awaited_once()
 
@@ -143,13 +133,11 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         assert out.first_sync is False
         assert out.progress is not None
         assert out.progress.xp_before == xp_before_incremental
-        assert out.progress.xp_after == row.xp_brut == out.payload.xp
+        assert out.progress.xp_after == row.xp_brut == out.snapshot.xp
         assert out.progress.cell_before == get_cell_count(xp_before_incremental)
-        assert out.progress.cell_after == out.payload.cell_count
-        assert out.progress.xp_progress_before == _xp_progress_schema(
-            get_xp_progress(xp_before_incremental),
-        )
-        assert out.progress.xp_progress_after == out.payload.xp_progress
+        assert out.progress.cell_after == out.snapshot.cell_count
+        assert out.progress.xp_progress_before == get_xp_progress(xp_before_incremental)
+        assert out.progress.xp_progress_after == out.snapshot.xp_progress
         assert row.commits_alltime == 3
         assert row.stars_received_raw == 3
         gh.contributions_totals_between.assert_awaited_once_with(
@@ -157,14 +145,21 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
             last_sync + timedelta(seconds=1),
             frozen_now,
         )
-        d = out.progress.breakdown_delta
-        assert d.commits == 20
-        assert d.pull_requests == 0
-        assert d.reviews == 0
-        assert d.stars == 150
-        assert d.forks == 0
-        assert d.followers == 0
-        assert d.tenure_years_bonus == 0
+        b = out.progress
+        delta_commits = b.breakdown_after.from_commits - b.breakdown_before.from_commits
+        delta_prs = b.breakdown_after.from_pull_requests - b.breakdown_before.from_pull_requests
+        delta_reviews = b.breakdown_after.from_reviews - b.breakdown_before.from_reviews
+        delta_stars = b.breakdown_after.from_stars - b.breakdown_before.from_stars
+        delta_forks = b.breakdown_after.from_forks - b.breakdown_before.from_forks
+        delta_followers = b.breakdown_after.from_followers - b.breakdown_before.from_followers
+        delta_tenure = b.breakdown_after.from_tenure - b.breakdown_before.from_tenure
+        assert delta_commits == 20
+        assert delta_prs == 0
+        assert delta_reviews == 0
+        assert delta_stars == 150
+        assert delta_forks == 0
+        assert delta_followers == 0
+        assert delta_tenure == 0
         repo.create.assert_not_called()
         db.commit.assert_awaited_once()
 
@@ -224,16 +219,19 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
         assert row.commits_alltime == 50 + 30
         assert row.prs_contributions_alltime == 10 + 8
         assert row.reviews_alltime == 5 + 2
-        d = out.progress.breakdown_delta
-        assert d.commits == 30 * 10
-        assert d.pull_requests == 8 * 30
-        assert d.reviews == 2 * 15
+        b = out.progress
+        delta_commits = b.breakdown_after.from_commits - b.breakdown_before.from_commits
+        delta_prs = b.breakdown_after.from_pull_requests - b.breakdown_before.from_pull_requests
+        delta_reviews = b.breakdown_after.from_reviews - b.breakdown_before.from_reviews
+        assert delta_commits == 30 * 10
+        assert delta_prs == 8 * 30
+        assert delta_reviews == 2 * 15
 
 
 @pytest.mark.asyncio
 async def test_sync_for_github_login_resolves_id_from_profile() -> None:
     anchor = datetime(2016, 1, 1, tzinfo=UTC)
-    inputs = GithubScoreInputs(
+    inputs = GitHubScoreInputs(
         commits_alltime=0,
         prs_contributions_alltime=0,
         reviews_alltime=0,

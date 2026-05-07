@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 from app.domain.scoring import (
     calculate_xp,
     get_cell_count,
@@ -37,7 +37,7 @@ def test_star_cap_aggregate(
 
 
 def test_xp_minimum_inputs() -> None:
-    inp = GithubScoreInputs(
+    inp = GitHubScoreInputs(
         commits_alltime=0,
         prs_contributions_alltime=0,
         reviews_alltime=0,
@@ -84,7 +84,7 @@ def test_cell_count_increases_with_xp_under_regime_below_fifty_level() -> None:
 
 
 def test_followers_cap_for_xp_breakdown() -> None:
-    inp = GithubScoreInputs(
+    inp = GitHubScoreInputs(
         commits_alltime=0,
         prs_contributions_alltime=0,
         reviews_alltime=0,

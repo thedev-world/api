@@ -1,50 +1,74 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
 
-from app.clients.github import (
-    GitHubAPIError,
-    GitHubClient,
-    GitHubRateLimitError,
-    GitHubUserNotFoundError,
-)
-from app.config import Settings, get_settings
+from app.core.github_errors import call_with_github_error_mapping
 from app.database import get_db
+from app.dependencies.auth import get_current_developer
+from app.dependencies.providers import get_score_sync_service
+from app.domain.score_snapshot import SyncProgress
+from app.models.developer import Developer
+from app.schemas.developer_public import DeveloperPublicResponse, developer_public_from_orm
+from app.schemas.score import (
+    XpProgressSchema,
+    public_score_response_from,
+)
 from app.schemas.sync_score import (
     MeSyncCooldownResponse,
     MeSyncPerformedResponse,
-    MeSyncRequestBody,
     MeSyncUnionResponse,
+    ScoreSyncProgressSchema,
+    ScoreXpBreakdownDeltaSchema,
 )
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/me", tags=["me"])
-
-_GITHUB_ERROR_DETAIL_MAX = 800
+router = APIRouter(prefix="/me", tags=["me"], redirect_slashes=False)
 
 
-def _github_api_error_detail(exc: GitHubAPIError) -> str:
-    msg = str(exc).strip()
-    if not msg:
-        return "Unexpected error from GitHub or GraphQL."
-    if len(msg) > _GITHUB_ERROR_DETAIL_MAX:
-        return msg[:_GITHUB_ERROR_DETAIL_MAX] + "…"
-    return msg
+@router.get("", response_model=DeveloperPublicResponse)
+@router.get("/", response_model=DeveloperPublicResponse)
+async def get_me(
+    developer: Annotated[Developer, Depends(get_current_developer)],
+) -> DeveloperPublicResponse:
+    return developer_public_from_orm(developer)
 
 
-def get_github_client(settings: Annotated[Settings, Depends(get_settings)]) -> GitHubClient:
-    return GitHubClient(settings)
-
-
-def get_score_sync_service(
-    client: Annotated[GitHubClient, Depends(get_github_client)],
-) -> ScoreSyncService:
-    return ScoreSyncService(client)
+def _map_sync_progress(progress: SyncProgress) -> ScoreSyncProgressSchema:
+    b_before = progress.breakdown_before
+    b_after = progress.breakdown_after
+    return ScoreSyncProgressSchema(
+        xp_before=progress.xp_before,
+        xp_after=progress.xp_after,
+        level_before=progress.level_before,
+        level_after=progress.level_after,
+        cell_before=progress.cell_before,
+        cell_after=progress.cell_after,
+        xp_progress_before=XpProgressSchema(
+            level=progress.xp_progress_before.level,
+            xp_in_level=progress.xp_progress_before.xp_in_level,
+            xp_needed=progress.xp_progress_before.xp_needed,
+            percent=progress.xp_progress_before.percent,
+        ),
+        xp_progress_after=XpProgressSchema(
+            level=progress.xp_progress_after.level,
+            xp_in_level=progress.xp_progress_after.xp_in_level,
+            xp_needed=progress.xp_progress_after.xp_needed,
+            percent=progress.xp_progress_after.percent,
+        ),
+        breakdown_delta=ScoreXpBreakdownDeltaSchema(
+            commits=b_after.from_commits - b_before.from_commits,
+            pull_requests=b_after.from_pull_requests - b_before.from_pull_requests,
+            reviews=b_after.from_reviews - b_before.from_reviews,
+            stars=b_after.from_stars - b_before.from_stars,
+            forks=b_after.from_forks - b_before.from_forks,
+            followers=b_after.from_followers - b_before.from_followers,
+            tenure_years_bonus=b_after.from_tenure - b_before.from_tenure,
+        ),
+    )
 
 
 def _cooldown(resp: MeSyncCooldown) -> MeSyncCooldownResponse:
@@ -52,12 +76,14 @@ def _cooldown(resp: MeSyncCooldown) -> MeSyncCooldownResponse:
 
 
 def _performed(p: MeSyncPerformed) -> MeSyncPerformedResponse:
+    payload = public_score_response_from(p.snapshot)
+    progress = _map_sync_progress(p.progress) if p.progress is not None else None
     return MeSyncPerformedResponse.model_validate(
         {
-            **p.payload.model_dump(),
+            **payload.model_dump(),
             "sync_performed": True,
             "first_sync": p.first_sync,
-            "progress": p.progress,
+            "progress": progress,
         }
     )
 
@@ -68,36 +94,17 @@ def _performed(p: MeSyncPerformed) -> MeSyncPerformedResponse:
     response_model_by_alias=True,
 )
 async def me_sync_score(
-    body: MeSyncRequestBody,
+    developer: Annotated[Developer, Depends(get_current_developer)],
     db: Annotated[AsyncSession, Depends(get_db)],
     service: Annotated[ScoreSyncService, Depends(get_score_sync_service)],
 ) -> MeSyncUnionResponse:
-    try:
-        result = await service.sync_for_github_login(
+    result = await call_with_github_error_mapping(
+        service.sync_for_actor(
             db,
-            github_login=body.github_login,
+            github_id=developer.github_id,
+            login=developer.github_login,
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid login",
-        ) from exc
-    except GitHubUserNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="GitHub user not found",
-        ) from None
-    except GitHubRateLimitError:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="GitHub rate limit exceeded. Retry later.",
-        ) from None
-    except GitHubAPIError as exc:
-        logger.warning("GitHub client error during /me/sync: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_github_api_error_detail(exc),
-        ) from exc
+    )
 
     if isinstance(result, MeSyncCooldown):
         return _cooldown(result)

@@ -1,23 +1,23 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 from app.domain.scoring import stars_after_single_repo_cap
-from app.services.github_score_service import GithubScoreService
+from app.services.github_score_service import GitHubScoreService
 
 
 class StubGitHubFetcher:
-    def __init__(self, payload: GithubScoreInputs) -> None:
+    def __init__(self, payload: GitHubScoreInputs) -> None:
         self._payload = payload
 
-    async def fetch_score_inputs(self, login: str) -> GithubScoreInputs:
+    async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
         _ = login
         return self._payload
 
 
 @pytest.mark.asyncio
 async def test_service_build_snapshot_reflects_github_inputs() -> None:
-    inp = GithubScoreInputs(
+    inp = GitHubScoreInputs(
         commits_alltime=1,
         prs_contributions_alltime=1,
         reviews_alltime=1,
@@ -26,7 +26,7 @@ async def test_service_build_snapshot_reflects_github_inputs() -> None:
         followers=3,
         account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
     )
-    service = GithubScoreService(StubGitHubFetcher(inp))
+    service = GitHubScoreService(StubGitHubFetcher(inp))
     snap = await service.build_public_snapshot("any")
 
     raw, capped_total = stars_after_single_repo_cap(inp.stars_per_repo)

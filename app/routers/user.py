@@ -3,10 +3,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from app.database import get_db
+from app.dependencies.providers import get_developer_repository
 from app.repositories.developer import DeveloperRepository
 from app.schemas.developer_public import DeveloperPublicResponse, developer_public_from_orm
 
@@ -23,7 +22,7 @@ router = APIRouter(prefix="/user", tags=["user"])
 )
 async def get_developer_by_github_login(
     github_login: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    repo: Annotated[DeveloperRepository, Depends(get_developer_repository)],
 ) -> DeveloperPublicResponse:
     stripped = github_login.strip()
     if not stripped:
@@ -32,7 +31,6 @@ async def get_developer_by_github_login(
             detail="GitHub login cannot be empty",
         )
 
-    repo = DeveloperRepository(db)
     row = await repo.get_by_github_login(stripped)
     if row is None:
         raise HTTPException(

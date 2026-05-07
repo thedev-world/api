@@ -3,7 +3,7 @@ from datetime import datetime
 
 
 @dataclass(frozen=True, slots=True)
-class GithubScoreInputs:
+class GitHubScoreInputs:
     commits_alltime: int
     prs_contributions_alltime: int
     reviews_alltime: int

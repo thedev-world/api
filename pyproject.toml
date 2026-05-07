@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Devplanet API — FastAPI, async SQLAlchemy, Celery"
 requires-python = ">=3.12"
 dependencies = [
+    "authlib>=1.4.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -16,6 +17,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "celery[redis]>=5.4.0",
     "httpx>=0.28.0",
+    "pyjwt>=2.10.0",
 ]
 
 [project.optional-dependencies]
