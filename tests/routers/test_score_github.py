@@ -1,16 +1,16 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.domain.github_inputs import GithubScoreInputs
+from app.dependencies.providers import get_github_score_service
+from app.domain.github_inputs import GitHubScoreInputs
 from app.main import app
-from app.routers.score_github import get_github_score_service
-from app.services.github_score_service import GithubScoreService
+from app.services.github_score_service import GitHubScoreService
 
 
 class _DummyFetcher:
-    async def fetch_score_inputs(self, login: str) -> GithubScoreInputs:
+    async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
         _ = login
-        return GithubScoreInputs(
+        return GitHubScoreInputs(
             commits_alltime=10,
             prs_contributions_alltime=1,
             reviews_alltime=1,
@@ -23,7 +23,7 @@ class _DummyFetcher:
 
 @pytest.mark.asyncio
 async def test_github_score_route_returns_payload(api_client) -> None:
-    app.dependency_overrides[get_github_score_service] = lambda: GithubScoreService(_DummyFetcher())
+    app.dependency_overrides[get_github_score_service] = lambda: GitHubScoreService(_DummyFetcher())
 
     resp = await api_client.get("/api/v1/github/alice/score")
 

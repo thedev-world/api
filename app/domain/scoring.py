@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 
 from app.domain.datetime_github import github_account_age_full_years
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 
 FOLLOWERS_COUNT_CAP_FOR_XP = 500
 STARS_SUM_SKIP_PER_REPO_CAP = 50
@@ -77,7 +77,7 @@ def xp_breakdown_from_persisted_components(
     )
 
 
-def calculate_xp(inputs: GithubScoreInputs) -> tuple[int, XpBreakdownContribution]:
+def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContribution]:
     _, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
 
     years = github_account_age_full_years(inputs.account_created_at)

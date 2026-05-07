@@ -5,22 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.score import GithubPublicScoreResponse, XpProgressSchema
-
-
-class MeSyncRequestBody(BaseModel):
-    """Open testing phase: caller passes which GitHub user to sync."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    github_login: str = Field(
-        ...,
-        min_length=1,
-        description=(
-            "GitHub login to persist. With OAuth later, this will come from the access token "
-            "and body may be ignored."
-        ),
-    )
+from app.schemas.score import GitHubPublicScoreResponse, XpProgressSchema
 
 
 class ScoreXpBreakdownDeltaSchema(BaseModel):
@@ -59,7 +44,7 @@ class MeSyncCooldownResponse(BaseModel):
     retry_after: datetime
 
 
-class MeSyncPerformedResponse(GithubPublicScoreResponse):
+class MeSyncPerformedResponse(GitHubPublicScoreResponse):
     model_config = ConfigDict(extra="forbid")
 
     sync_performed: Literal[True] = True

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.datetime_github import github_account_age_full_years
-from app.services.github_score_service import GithubPublicScoreSnapshot
+from app.domain.score_snapshot import GitHubPublicScoreSnapshot
 
 
 class ScoreXpBreakdownSchema(BaseModel):
@@ -34,7 +34,7 @@ class PlayerClassSchema(BaseModel):
     phrase: str
 
 
-class GithubAggregatesPublicSchema(BaseModel):
+class GitHubAggregatesPublicSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     commits_alltime: int
@@ -51,7 +51,7 @@ class GithubAggregatesPublicSchema(BaseModel):
     stars_received_capped_total: int
 
 
-class GithubPublicScoreResponse(BaseModel):
+class GitHubPublicScoreResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     login: str
@@ -60,10 +60,10 @@ class GithubPublicScoreResponse(BaseModel):
     xp_progress: XpProgressSchema
     cell_count: int
     player_class: PlayerClassSchema
-    aggregates: GithubAggregatesPublicSchema
+    aggregates: GitHubAggregatesPublicSchema
 
 
-def public_score_response_from(snapshot: GithubPublicScoreSnapshot) -> GithubPublicScoreResponse:
+def public_score_response_from(snapshot: GitHubPublicScoreSnapshot) -> GitHubPublicScoreResponse:
     inp = snapshot.github_inputs
     b = snapshot.xp_breakdown
     p = snapshot.xp_progress
@@ -73,7 +73,7 @@ def public_score_response_from(snapshot: GithubPublicScoreSnapshot) -> GithubPub
         if snapshot.owners_repos_count_override is not None
         else len(inp.stars_per_repo)
     )
-    return GithubPublicScoreResponse(
+    return GitHubPublicScoreResponse(
         login=snapshot.login,
         xp=snapshot.xp,
         breakdown=ScoreXpBreakdownSchema(
@@ -93,7 +93,7 @@ def public_score_response_from(snapshot: GithubPublicScoreSnapshot) -> GithubPub
         ),
         cell_count=snapshot.cell_count,
         player_class=PlayerClassSchema(name=cls.name, phrase=cls.phrase),
-        aggregates=GithubAggregatesPublicSchema(
+        aggregates=GitHubAggregatesPublicSchema(
             commits_alltime=inp.commits_alltime,
             prs_contributions_alltime=inp.prs_contributions_alltime,
             reviews_alltime=inp.reviews_alltime,

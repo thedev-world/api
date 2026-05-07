@@ -9,6 +9,11 @@ _ENV_DEFAULTS: dict[str, str] = {
     "REDIS_URL": "redis://127.0.0.1:6379/0",
     "CELERY_BROKER_URL": "redis://127.0.0.1:6379/0",
     "CELERY_RESULT_BACKEND": "redis://127.0.0.1:6379/0",
+    "GITHUB_OAUTH_CLIENT_ID": "test-oauth-client-id",
+    "GITHUB_OAUTH_CLIENT_SECRET": "test-oauth-client-secret",
+    "OAUTH_CALLBACK_URL": "http://test/api/v1/auth/github/callback",
+    "ALLOWED_FRONTEND_ORIGINS": "http://localhost:3000,http://test",
+    "JWT_SECRET_KEY": "unit-test-jwt-secret-key-32-bytes-min",
 }
 
 

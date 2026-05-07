@@ -1,3 +1,3 @@
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 
-__all__ = ["GithubScoreInputs"]
+__all__ = ["GitHubScoreInputs"]

@@ -1,20 +1,32 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.dependencies.providers import get_developer_repository
 from app.domain.scoring import get_cell_count
+from app.main import app
 from tests.factories.developer_factory import make_developer
+
+
+def _repo_override(return_value):
+    repo = MagicMock()
+    repo.get_by_github_login = AsyncMock(return_value=return_value)
+    app.dependency_overrides[get_developer_repository] = lambda: repo
+    return repo
+
+
+def _cleanup():
+    app.dependency_overrides.pop(get_developer_repository, None)
 
 
 @pytest.mark.asyncio
 async def test_get_user_returns_developer_snapshot(api_client) -> None:
     dev = make_developer(github_login="alice")
+    repo = _repo_override(dev)
 
-    with patch("app.routers.user.DeveloperRepository") as RepoCls:
-        repo = MagicMock()
-        repo.get_by_github_login = AsyncMock(return_value=dev)
-        RepoCls.return_value = repo
-
+    try:
         resp = await api_client.get("/api/v1/user/alice")
+    finally:
+        _cleanup()
 
     assert resp.status_code == 200
     data = resp.json()
@@ -27,16 +39,17 @@ async def test_get_user_returns_developer_snapshot(api_client) -> None:
     assert data["cell_count"] == get_cell_count(dev.xp_brut)
     assert data["player_class"]["name"] == "Seedling"
     assert "phrase" in data["player_class"]
+    repo.get_by_github_login.assert_awaited_once_with("alice")
 
 
 @pytest.mark.asyncio
 async def test_get_user_404_when_missing(api_client) -> None:
-    with patch("app.routers.user.DeveloperRepository") as RepoCls:
-        repo = MagicMock()
-        repo.get_by_github_login = AsyncMock(return_value=None)
-        RepoCls.return_value = repo
+    _repo_override(None)
 
+    try:
         resp = await api_client.get("/api/v1/user/ghost")
+    finally:
+        _cleanup()
 
     assert resp.status_code == 404
 
@@ -44,18 +57,15 @@ async def test_get_user_404_when_missing(api_client) -> None:
 @pytest.mark.asyncio
 async def test_get_user_case_insensitive_matches_lower_index(api_client) -> None:
     dev = make_developer(github_login="AliceMixed")
+    repo = _repo_override(dev)
 
-    with patch("app.routers.user.DeveloperRepository") as RepoCls:
-        repo = MagicMock()
-        repo.get_by_github_login = AsyncMock(return_value=dev)
-        RepoCls.return_value = repo
-
+    try:
         resp = await api_client.get("/api/v1/user/AliceMixed")
+    finally:
+        _cleanup()
 
     assert resp.status_code == 200
-    repo_get = RepoCls.return_value.get_by_github_login
-    repo_get.assert_awaited_once()
-    assert repo_get.await_args.args[0] == "AliceMixed"
+    repo.get_by_github_login.assert_awaited_once_with("AliceMixed")
 
 
 @pytest.mark.asyncio

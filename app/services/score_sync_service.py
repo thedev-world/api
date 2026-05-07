@@ -10,25 +10,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.github import GitHubAPIError, GitHubClient
 from app.domain.datetime_github import parse_github_datetime
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
+from app.domain.score_snapshot import (
+    GitHubPublicScoreSnapshot,
+    SyncProgress,
+    github_snapshot_from_developer_row,
+    github_snapshot_from_inputs,
+)
 from app.domain.scoring import (
-    XpBreakdownContribution,
-    XpProgress,
     calculate_xp,
     stars_after_single_repo_cap,
 )
 from app.models.developer import Developer
 from app.repositories.developer import DeveloperRepository
-from app.schemas.score import (
-    GithubPublicScoreResponse,
-    XpProgressSchema,
-    public_score_response_from,
-)
-from app.schemas.sync_score import ScoreSyncProgressSchema, ScoreXpBreakdownDeltaSchema
-from app.services.github_score_service import (
-    github_snapshot_from_developer_row,
-    github_snapshot_from_inputs,
-)
 
 SYNC_COOLDOWN = timedelta(hours=6)
 
@@ -43,32 +37,8 @@ class MeSyncCooldown:
 @dataclass(frozen=True, slots=True)
 class MeSyncPerformed:
     first_sync: bool
-    payload: GithubPublicScoreResponse
-    progress: ScoreSyncProgressSchema | None
-
-
-def _breakdown_delta_points(
-    before: XpBreakdownContribution,
-    after: XpBreakdownContribution,
-) -> ScoreXpBreakdownDeltaSchema:
-    return ScoreXpBreakdownDeltaSchema(
-        commits=after.from_commits - before.from_commits,
-        pull_requests=after.from_pull_requests - before.from_pull_requests,
-        reviews=after.from_reviews - before.from_reviews,
-        stars=after.from_stars - before.from_stars,
-        forks=after.from_forks - before.from_forks,
-        followers=after.from_followers - before.from_followers,
-        tenure_years_bonus=after.from_tenure - before.from_tenure,
-    )
-
-
-def _xp_progress_schema(progress: XpProgress) -> XpProgressSchema:
-    return XpProgressSchema(
-        level=progress.level,
-        xp_in_level=progress.xp_in_level,
-        xp_needed=progress.xp_needed,
-        percent=progress.percent,
-    )
+    snapshot: GitHubPublicScoreSnapshot
+    progress: SyncProgress | None
 
 
 class ScoreSyncService:
@@ -137,15 +107,9 @@ class ScoreSyncService:
             await db.commit()
 
             snap = github_snapshot_from_inputs(trimmed, inputs)
-            return MeSyncPerformed(
-                first_sync=True,
-                payload=public_score_response_from(snap),
-                progress=None,
-            )
+            return MeSyncPerformed(first_sync=True, snapshot=snap, progress=None)
 
         prev_snap = github_snapshot_from_developer_row(trimmed, row)
-        prev_xp = prev_snap.xp
-        prev_level = prev_snap.xp_progress.level
         prev_breakdown = prev_snap.xp_breakdown
 
         last = row.last_sync_at or row.created_at
@@ -185,7 +149,7 @@ class ScoreSyncService:
         row.last_sync_at = now
         row.updated_at = now
 
-        inputs = GithubScoreInputs(
+        inputs = GitHubScoreInputs(
             commits_alltime=row.commits_alltime,
             prs_contributions_alltime=row.prs_contributions_alltime,
             reviews_alltime=row.reviews_alltime,
@@ -200,17 +164,17 @@ class ScoreSyncService:
         await db.commit()
 
         after_snap = github_snapshot_from_inputs(trimmed, inputs)
-        body = public_score_response_from(after_snap)
 
-        progress = ScoreSyncProgressSchema(
-            xp_before=prev_xp,
+        progress = SyncProgress(
+            xp_before=prev_snap.xp,
             xp_after=after_snap.xp,
-            level_before=prev_level,
+            level_before=prev_snap.xp_progress.level,
             level_after=after_snap.xp_progress.level,
             cell_before=prev_snap.cell_count,
             cell_after=after_snap.cell_count,
-            xp_progress_before=_xp_progress_schema(prev_snap.xp_progress),
-            xp_progress_after=_xp_progress_schema(after_snap.xp_progress),
-            breakdown_delta=_breakdown_delta_points(prev_breakdown, new_breakdown),
+            xp_progress_before=prev_snap.xp_progress,
+            xp_progress_after=after_snap.xp_progress,
+            breakdown_before=prev_breakdown,
+            breakdown_after=new_breakdown,
         )
-        return MeSyncPerformed(first_sync=False, payload=body, progress=progress)
+        return MeSyncPerformed(first_sync=False, snapshot=after_snap, progress=progress)

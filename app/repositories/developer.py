@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import uuid
+
 from app.models.developer import Developer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class DeveloperRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def get_by_id(self, developer_id: uuid.UUID) -> Developer | None:
+        row = await self.db.scalar(select(Developer).where(Developer.id == developer_id))
+        return row
 
     async def get_by_github_id(self, github_id: int) -> Developer | None:
         row = await self.db.scalar(select(Developer).where(Developer.github_id == github_id))
@@ -23,6 +31,3 @@ class DeveloperRepository:
     async def create(self, developer: Developer) -> Developer:
         self.db.add(developer)
         return developer
-
-    async def flush(self) -> None:
-        await self.db.flush()

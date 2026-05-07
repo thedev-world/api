@@ -7,7 +7,7 @@ import httpx
 
 from app.config import Settings
 from app.domain.datetime_github import parse_github_datetime
-from app.domain.github_inputs import GithubScoreInputs
+from app.domain.github_inputs import GitHubScoreInputs
 
 
 class GitHubUserNotFoundError(Exception):
@@ -38,7 +38,7 @@ query ContributionSlice($login: String!, $from: DateTime!, $to: DateTime!) {
 
 
 class GitHubStatsFetcher(Protocol):
-    async def fetch_score_inputs(self, login: str) -> GithubScoreInputs: ...
+    async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs: ...
 
 
 class GitHubClient(GitHubStatsFetcher):
@@ -144,7 +144,7 @@ class GitHubClient(GitHubStatsFetcher):
             int(cc.get("totalPullRequestReviewContributions", 0) or 0),
         )
 
-    async def fetch_score_inputs(self, login: str) -> GithubScoreInputs:
+    async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
         login = login.strip()
         if not login:
             raise ValueError("GitHub login cannot be empty")
@@ -162,7 +162,7 @@ class GitHubClient(GitHubStatsFetcher):
 
             stars_per_repo, forks_received = await self._repos_aggregates(client, login)
 
-            return GithubScoreInputs(
+            return GitHubScoreInputs(
                 commits_alltime=commits,
                 prs_contributions_alltime=prs,
                 reviews_alltime=reviews,

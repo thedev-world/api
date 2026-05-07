@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "Devplanet API",
-    "description": "Endpoints for devplanet-api (FastAPI): root, health, persisted user snapshot, POST /me/sync, GitHub public score.",
+    "description": "Endpoints for devplanet-api (FastAPI): root, health, GitHub OAuth, authenticated GET /me and POST /me/sync, persisted user, GitHub public score.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -16,6 +16,31 @@
     }
   ],
   "item": [
+    {
+      "name": "Auth (GitHub)",
+      "item": [
+        {
+          "name": "GET /api/v1/auth/github/start",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/github/start",
+            "description": "302 to GitHub; sets oauth state cookie. After authorizing, GitHub redirects to OAUTH_CALLBACK_URL (configure in API .env)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "description": "204; clears devplanet_session cookie."
+          },
+          "response": []
+        }
+      ]
+    },
     {
       "name": "Root",
       "item": [
@@ -47,29 +72,25 @@
       ]
     },
     {
-      "name": "Me (sync)",
+      "name": "Me",
       "item": [
+        {
+          "name": "GET /api/v1/me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/me",
+            "description": "Current developer (session cookie). Same public shape as GET /user/{login}. 401 without valid session."
+          },
+          "response": []
+        },
         {
           "name": "POST /api/v1/me/sync",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"github_login\": \"{{githubUsername}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
+            "header": [],
             "url": "{{baseUrl}}/api/v1/me/sync",
-            "description": "Persists aggregated score for the given GitHub login (no OAuth yet — anyone can call it). One GET /users to resolve numeric id + canonical login; then heavy fetch or incremental delta. Same response shape as GET …/github/:user/score when sync ran, plus sync_performed / first_sync / progress. Cooldown returns a minimal JSON when under 6h since last_sync_at."
+            "description": "Requires session cookie (devplanet_session) from GitHub OAuth. Syncs the authenticated GitHub user only. Same response shape as before (sync_performed, first_sync, progress, cooldown). 401 without cookie."
           },
           "response": []
         }
