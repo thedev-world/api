@@ -83,28 +83,44 @@ class ScoreSyncService:
             if now - last_sync < SYNC_COOLDOWN:
                 return MeSyncCooldown(retry_after=last_sync + SYNC_COOLDOWN)
 
-        if row is None:
+        needs_full_backfill = row is None or row.last_sync_at is None
+        if needs_full_backfill:
             inputs = await self._github.fetch_score_inputs(trimmed)
             stars_raw, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
             xp, _ = calculate_xp(inputs)
-            created = Developer(
-                github_id=github_id,
-                github_login=trimmed,
-                commits_alltime=inputs.commits_alltime,
-                prs_contributions_alltime=inputs.prs_contributions_alltime,
-                reviews_alltime=inputs.reviews_alltime,
-                forks_received=inputs.forks_received,
-                followers=inputs.followers,
-                stars_received_raw=stars_raw,
-                stars_received_capped=stars_capped,
-                owned_non_fork_repos_count=len(inputs.stars_per_repo),
-                account_created_at=inputs.account_created_at,
-                xp_brut=xp,
-                last_sync_at=now,
-                created_at=now,
-                updated_at=now,
-            )
-            await repo.create(created)
+            if row is None:
+                created = Developer(
+                    github_id=github_id,
+                    github_login=trimmed,
+                    commits_alltime=inputs.commits_alltime,
+                    prs_contributions_alltime=inputs.prs_contributions_alltime,
+                    reviews_alltime=inputs.reviews_alltime,
+                    forks_received=inputs.forks_received,
+                    followers=inputs.followers,
+                    stars_received_raw=stars_raw,
+                    stars_received_capped=stars_capped,
+                    owned_non_fork_repos_count=len(inputs.stars_per_repo),
+                    account_created_at=inputs.account_created_at,
+                    xp_brut=xp,
+                    last_sync_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                await repo.create(created)
+            else:
+                row.commits_alltime = inputs.commits_alltime
+                row.prs_contributions_alltime = inputs.prs_contributions_alltime
+                row.reviews_alltime = inputs.reviews_alltime
+                row.forks_received = inputs.forks_received
+                row.followers = inputs.followers
+                row.stars_received_raw = stars_raw
+                row.stars_received_capped = stars_capped
+                row.owned_non_fork_repos_count = len(inputs.stars_per_repo)
+                row.account_created_at = inputs.account_created_at
+                row.github_login = trimmed
+                row.xp_brut = xp
+                row.last_sync_at = now
+                row.updated_at = now
             await db.commit()
 
             snap = github_snapshot_from_inputs(trimmed, inputs)
