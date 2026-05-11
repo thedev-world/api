@@ -83,6 +83,61 @@ async def test_first_sync_creates_and_commits() -> None:
 
 
 @pytest.mark.asyncio
+async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental() -> None:
+    """Stub developer from OAuth (last_sync_at=None) must get fetch_score_inputs, not delta-only."""
+    fixed_now = datetime(2032, 3, 1, tzinfo=UTC)
+    anchor = datetime(2015, 1, 1, tzinfo=UTC)
+    inputs = GitHubScoreInputs(
+        commits_alltime=2853,
+        prs_contributions_alltime=619,
+        reviews_alltime=246,
+        stars_per_repo=(9,),
+        forks_received=2,
+        followers=30,
+        account_created_at=anchor,
+    )
+
+    oauth_row = make_developer(
+        github_id=12345,
+        github_login="ExampleUser",
+        last_sync_at=None,
+        commits_alltime=0,
+        prs_contributions_alltime=0,
+        reviews_alltime=0,
+        created_at=fixed_now - timedelta(days=1),
+        updated_at=fixed_now - timedelta(days=1),
+    )
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    gh = MagicMock()
+    gh.fetch_score_inputs = AsyncMock(return_value=inputs)
+    svc = ScoreSyncService(gh)
+
+    with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.get_by_github_id = AsyncMock(return_value=oauth_row)
+        repo.create = AsyncMock()
+        RepoCls.return_value = repo
+
+        with patch("app.services.score_sync_service.datetime", _patch_now(fixed_now)):
+            out = await svc.sync_for_actor(db, github_id=12345, login="ExampleUser")
+
+        assert isinstance(out, MeSyncPerformed)
+        assert out.first_sync is True
+        assert out.progress is None
+        assert out.snapshot.xp == oauth_row.xp_brut
+        gh.fetch_score_inputs.assert_awaited_once_with("ExampleUser")
+        gh.contributions_totals_between.assert_not_called()
+        repo.create.assert_not_called()
+        assert oauth_row.commits_alltime == 2853
+        assert oauth_row.prs_contributions_alltime == 619
+        assert oauth_row.reviews_alltime == 246
+        assert oauth_row.last_sync_at == fixed_now
+        db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_incremental_sync_updates_row_and_returns_progress() -> None:
     last_sync = datetime(2030, 5, 1, 12, 0, 0, tzinfo=UTC)
     frozen_now = last_sync + timedelta(hours=8)
