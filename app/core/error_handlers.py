@@ -3,6 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.clients.github import (
+    GitHubAPIError,
+    GitHubRateLimitError,
+    GitHubUserNotFoundError,
+    InvalidGitHubLoginError,
+)
 from app.services.auth_service import (
     BadOAuthStateError,
     GitHubOAuthCallbackQueryError,
@@ -17,6 +23,40 @@ from fastapi.responses import JSONResponse
 from starlette import status
 
 logger = logging.getLogger(__name__)
+
+_DETAIL_MAX = 800
+
+
+def register_github_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(InvalidGitHubLoginError)
+    async def _invalid_login(_request: Any, _exc: InvalidGitHubLoginError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": "Invalid login"},
+        )
+
+    @app.exception_handler(GitHubUserNotFoundError)
+    async def _user_not_found(_request: Any, _exc: GitHubUserNotFoundError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "GitHub user not found"},
+        )
+
+    @app.exception_handler(GitHubRateLimitError)
+    async def _rate_limit(_request: Any, _exc: GitHubRateLimitError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "GitHub rate limit exceeded. Retry later."},
+        )
+
+    @app.exception_handler(GitHubAPIError)
+    async def _api_err(_request: Any, exc: GitHubAPIError) -> JSONResponse:
+        logger.warning("GitHub client error: %s", exc)
+        detail = str(exc).strip()[:_DETAIL_MAX] or "Unexpected error from GitHub or GraphQL."
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": detail},
+        )
 
 
 def register_auth_oauth_exception_handlers(app: FastAPI) -> None:

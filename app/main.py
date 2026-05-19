@@ -4,7 +4,10 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.core.error_handlers import register_auth_oauth_exception_handlers
+from app.core.error_handlers import (
+    register_auth_oauth_exception_handlers,
+    register_github_exception_handlers,
+)
 from app.database import engine
 from app.routers.auth import router as auth_router
 from app.routers.health import router as health_router
@@ -27,6 +30,7 @@ app = FastAPI(
 )
 
 register_auth_oauth_exception_handlers(app)
+register_github_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,

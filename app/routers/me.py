@@ -4,7 +4,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.github_errors import call_with_github_error_mapping
 from app.database import get_db
 from app.dependencies.auth import get_current_developer
 from app.dependencies.providers import get_score_sync_service
@@ -98,12 +97,10 @@ async def me_sync_score(
     db: Annotated[AsyncSession, Depends(get_db)],
     service: Annotated[ScoreSyncService, Depends(get_score_sync_service)],
 ) -> MeSyncUnionResponse:
-    result = await call_with_github_error_mapping(
-        service.sync_for_actor(
-            db,
-            github_id=developer.github_id,
-            login=developer.github_login,
-        )
+    result = await service.sync_for_actor(
+        db,
+        github_id=developer.github_id,
+        login=developer.github_login,
     )
 
     if isinstance(result, MeSyncCooldown):
