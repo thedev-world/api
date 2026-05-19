@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from starlette import status
 
-from app.core.github_errors import call_with_github_error_mapping
 from app.dependencies.providers import get_github_score_service
 from app.schemas.score import GitHubPublicScoreResponse, public_score_response_from
 from app.services.github_score_service import GitHubScoreService
@@ -26,5 +25,5 @@ async def github_username_score(
     username: str,
     service: Annotated[GitHubScoreService, Depends(get_github_score_service)],
 ) -> GitHubPublicScoreResponse:
-    snapshot = await call_with_github_error_mapping(service.build_public_snapshot(username))
+    snapshot = await service.build_public_snapshot(username)
     return public_score_response_from(snapshot)

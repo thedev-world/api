@@ -18,6 +18,10 @@ class GitHubUserNotFoundError(Exception):
         self.login = login
 
 
+class InvalidGitHubLoginError(Exception):
+    pass
+
+
 class GitHubRateLimitError(Exception):
     pass
 
@@ -68,7 +72,7 @@ class GitHubClient(GitHubStatsFetcher):
     async def fetch_public_user_profile(self, login: str) -> dict[str, Any]:
         login = login.strip()
         if not login:
-            raise ValueError("GitHub login cannot be empty")
+            raise InvalidGitHubLoginError()
 
         async with self._open_client() as client:
             return await self._fetch_user_profile(client, login)
@@ -86,7 +90,7 @@ class GitHubClient(GitHubStatsFetcher):
         """
         login = login.strip()
         if not login:
-            raise ValueError("GitHub login cannot be empty")
+            raise InvalidGitHubLoginError()
         if range_from > range_to:
             return (0, 0, 0)
 
@@ -98,7 +102,7 @@ class GitHubClient(GitHubStatsFetcher):
     async def fetch_owner_repo_star_fork_totals(self, login: str) -> tuple[tuple[int, ...], int]:
         login = login.strip()
         if not login:
-            raise ValueError("GitHub login cannot be empty")
+            raise InvalidGitHubLoginError()
 
         async with self._open_client() as client:
             return await self._repos_aggregates(client, login)
@@ -132,7 +136,7 @@ class GitHubClient(GitHubStatsFetcher):
     async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
         login = login.strip()
         if not login:
-            raise ValueError("GitHub login cannot be empty")
+            raise InvalidGitHubLoginError()
 
         async with self._open_client() as client:
             profile = await self._fetch_user_profile(client, login)
