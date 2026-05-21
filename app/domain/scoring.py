@@ -109,6 +109,25 @@ def xp_for_level(level: int) -> int:
     return round(100 * math.pow(level, 1.8))
 
 
+_MAX_LEVEL = 200
+# 200 levels gives ample headroom beyond the current Founder tier (lvl ~100).
+# TODO: profile real whale users to determine whether a hard cap in business logic
+#       (get_level, get_xp_progress) is actually needed, or if 200 stays as a safe ceiling.
+
+
+def _build_level_thresholds() -> tuple[int, ...]:
+    """XP required to reach each level, indexed from 1.
+    thresholds[0] = 0     (level 1 starts at 0 XP — matches get_xp_progress floor)
+    thresholds[1] = 348   (level 2 requires 348 XP)
+    thresholds[i] = xp_for_level(i + 1)
+    """
+    return tuple(0 if level == 1 else xp_for_level(level) for level in range(1, _MAX_LEVEL + 1))
+
+
+# Computed once at module import, lives in RAM for the lifetime of the process.
+LEVEL_XP_THRESHOLDS: tuple[int, ...] = _build_level_thresholds()
+
+
 def get_level(xp: int) -> int:
     if xp < 0:
         raise ValueError("xp cannot be negative")

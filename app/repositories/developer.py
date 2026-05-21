@@ -31,3 +31,8 @@ class DeveloperRepository:
     async def create(self, developer: Developer) -> Developer:
         self.db.add(developer)
         return developer
+
+    async def update(self, developer: Developer, **fields: object) -> Developer:
+        for key, value in fields.items():
+            setattr(developer, key, value)
+        return developer

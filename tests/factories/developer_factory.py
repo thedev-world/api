@@ -28,6 +28,8 @@ def make_developer(**overrides: object) -> Developer:
         "account_created_at": _ANCHOR,
         "xp_brut": 0,
         "last_sync_at": _ANCHOR,
+        "island": None,
+        "is_onboarded": False,
         "created_at": _ANCHOR,
         "updated_at": _ANCHOR,
     }
