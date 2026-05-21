@@ -7,6 +7,7 @@ from app.config import Settings, get_settings
 from app.database import get_db
 from app.repositories.developer import DeveloperRepository
 from app.services.auth_service import AuthService
+from app.services.developer_service import DeveloperService
 from app.services.github_oauth_service import GitHubOAuthService
 from app.services.github_score_service import GitHubScoreService
 from app.services.score_sync_service import ScoreSyncService
@@ -46,3 +47,7 @@ def get_developer_repository(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeveloperRepository:
     return DeveloperRepository(db)
+
+
+def get_developer_service() -> DeveloperService:
+    return DeveloperService()

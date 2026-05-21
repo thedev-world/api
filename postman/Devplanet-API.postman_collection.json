@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "name": "Devplanet API",
-    "description": "Endpoints for devplanet-api (FastAPI): root, health, GitHub OAuth, authenticated GET /me and POST /me/sync, persisted user, GitHub public score.",
+    "description": "Endpoints for devplanet-api (FastAPI): root, health, GitHub OAuth, authenticated GET /me, PATCH /me, POST /me/sync, POST /me/onboarding, onboarding islands, persisted user, GitHub public score.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -80,7 +80,36 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/me",
-            "description": "Current developer (session cookie). Same public shape as GET /user/{login}. 401 without valid session."
+            "description": "Current developer (session cookie). Includes island and is_onboarded fields. 401 without valid session."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/v1/me",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"island\": \"frontend\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/me",
+            "description": "Update mutable profile fields (island for now). Only provided fields are updated (exclude_unset). Read-only fields (scores, github_id, etc.) are not accepted and return 422. 401 without valid session."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/v1/me/onboarding",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/me/onboarding",
+            "description": "Mark onboarding as complete (sets is_onboarded=true). No request body required. Call after PATCH /me to set the island. Returns the updated developer profile. 401 without valid session."
           },
           "response": []
         },
@@ -91,6 +120,21 @@
             "header": [],
             "url": "{{baseUrl}}/api/v1/me/sync",
             "description": "Requires session cookie (devplanet_session) from GitHub OAuth. Syncs the authenticated GitHub user only. Same response shape as before (sync_performed, first_sync, progress, cooldown). 401 without cookie."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "GET /api/v1/onboarding/islands",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/onboarding/islands",
+            "description": "Public endpoint — no auth required. Returns all available islands as { islands: [{ value, label }] }. Use value to set the island via PATCH /me."
           },
           "response": []
         }

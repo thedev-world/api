@@ -6,10 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies.auth import get_current_developer
-from app.dependencies.providers import get_score_sync_service
+from app.dependencies.providers import get_developer_service, get_score_sync_service
 from app.domain.score_snapshot import SyncProgress
 from app.models.developer import Developer
 from app.schemas.developer_public import DeveloperPublicResponse, developer_public_from_orm
+from app.schemas.developer_update import DeveloperProfileUpdateRequest
 from app.schemas.score import (
     XpProgressSchema,
     public_score_response_from,
@@ -21,6 +22,7 @@ from app.schemas.sync_score import (
     ScoreSyncProgressSchema,
     ScoreXpBreakdownDeltaSchema,
 )
+from app.services.developer_service import DeveloperService
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,27 @@ async def get_me(
     developer: Annotated[Developer, Depends(get_current_developer)],
 ) -> DeveloperPublicResponse:
     return developer_public_from_orm(developer)
+
+
+@router.patch("", response_model=DeveloperPublicResponse)
+async def update_me(
+    payload: DeveloperProfileUpdateRequest,
+    developer: Annotated[Developer, Depends(get_current_developer)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[DeveloperService, Depends(get_developer_service)],
+) -> DeveloperPublicResponse:
+    updated = await service.update_profile(db, developer, payload)
+    return developer_public_from_orm(updated)
+
+
+@router.post("/onboarding", response_model=DeveloperPublicResponse, status_code=200)
+async def complete_onboarding(
+    developer: Annotated[Developer, Depends(get_current_developer)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    service: Annotated[DeveloperService, Depends(get_developer_service)],
+) -> DeveloperPublicResponse:
+    updated = await service.complete_onboarding(db, developer)
+    return developer_public_from_orm(updated)
 
 
 def _map_sync_progress(progress: SyncProgress) -> ScoreSyncProgressSchema:
