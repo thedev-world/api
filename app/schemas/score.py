@@ -34,6 +34,16 @@ class PlayerClassSchema(BaseModel):
     phrase: str
 
 
+class PlayerClassListItemSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    name: str
+    tier: int
+    required_level: int
+    phrase: str
+
+
 class GitHubAggregatesPublicSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

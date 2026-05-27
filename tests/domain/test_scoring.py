@@ -54,6 +54,21 @@ def test_xp_minimum_inputs() -> None:
 def test_first_player_class_matches_doc() -> None:
     klass = get_player_class(4)
     assert klass.name == "Seedling"
+    assert klass.slug == "seedling"
+    assert klass.tier == 1
+    assert klass.required_level == 1
+
+
+def test_player_class_advances_at_correct_level_boundaries() -> None:
+    from app.domain.scoring import PLAYER_CLASSES_LIST
+
+    for cls in PLAYER_CLASSES_LIST:
+        resolved = get_player_class(cls.required_level)
+        assert resolved.slug == cls.slug, f"Expected {cls.slug} at level {cls.required_level}"
+
+    for i, cls in enumerate(PLAYER_CLASSES_LIST[1:], start=1):
+        one_below = get_player_class(cls.required_level - 1)
+        assert one_below.slug == PLAYER_CLASSES_LIST[i - 1].slug
 
 
 def test_level_and_cells_zero_xp_anchor() -> None:

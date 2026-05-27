@@ -31,7 +31,10 @@ class XpProgress:
 
 @dataclass(frozen=True, slots=True)
 class PlayerClass:
+    slug: str
     name: str
+    tier: int
+    required_level: int
     phrase: str
 
 
@@ -169,19 +172,69 @@ def get_cell_count(xp: int) -> int:
     return _BASE_AT_LEVEL_50 + whale_bonus
 
 
+PLAYER_CLASSES_LIST: tuple[PlayerClass, ...] = (
+    PlayerClass(
+        slug="seedling",
+        name="Seedling",
+        tier=1,
+        required_level=1,
+        phrase="It compiles. That's something.",
+    ),
+    PlayerClass(
+        slug="builder",
+        name="Builder",
+        tier=2,
+        required_level=5,
+        phrase="You build, it breaks, you rebuild.",
+    ),
+    PlayerClass(
+        slug="crafter",
+        name="Crafter",
+        tier=3,
+        required_level=10,
+        phrase="People read your code without crying.",
+    ),
+    PlayerClass(
+        slug="architect",
+        name="Architect",
+        tier=4,
+        required_level=20,
+        phrase="You open issues on repos you didn't write.",
+    ),
+    PlayerClass(
+        slug="maintainer",
+        name="Maintainer",
+        tier=5,
+        required_level=35,
+        phrase="You merge PRs on Sundays. On purpose.",
+    ),
+    PlayerClass(
+        slug="legend",
+        name="Legend",
+        tier=6,
+        required_level=55,
+        phrase="People learned to code on your code.",
+    ),
+    PlayerClass(
+        slug="sovereign",
+        name="Sovereign",
+        tier=7,
+        required_level=80,
+        phrase="You deprecate APIs. People adapt.",
+    ),
+    PlayerClass(
+        slug="founder",
+        name="Founder",
+        tier=8,
+        required_level=100,
+        phrase="Someone forked your thing. Good. That was the point.",
+    ),
+)
+
+
 def get_player_class(level: int) -> PlayerClass:
-    classes: list[tuple[int, str, str]] = [
-        (1, "Seedling", "It compiles. That's something."),
-        (5, "Builder", "You build, it breaks, you rebuild."),
-        (10, "Crafter", "People read your code without crying."),
-        (20, "Architect", "You open issues on repos you didn't write."),
-        (35, "Maintainer", "You merge PRs on Sundays. On purpose."),
-        (55, "Legend", "People learned to code on your code."),
-        (80, "Sovereign", "You deprecate APIs. People adapt."),
-        (100, "Founder", "Someone forked your thing. Good. That was the point."),
-    ]
-    current = classes[0]
-    for min_level, name, phrase in classes:
-        if level >= min_level:
-            current = (min_level, name, phrase)
-    return PlayerClass(name=current[1], phrase=current[2])
+    current = PLAYER_CLASSES_LIST[0]
+    for cls in PLAYER_CLASSES_LIST:
+        if level >= cls.required_level:
+            current = cls
+    return current
