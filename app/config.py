@@ -76,6 +76,34 @@ class Settings(BaseSettings):
     oauth_state_cookie_name: str = Field(default="github_oauth_state")
     oauth_state_max_age_seconds: int = Field(default=600, ge=60, le=3600)
 
+    s3_endpoint_url: str = Field(
+        default="http://localhost:9000",
+        description=(
+            "S3-compatible endpoint URL. "
+            "Scaleway in prod, MinIO in local dev."
+        ),
+    )
+    s3_access_key: str = Field(
+        default="devplanet",
+        description="S3 access key (Scaleway SCW_ACCESS_KEY or MinIO MINIO_ROOT_USER)",
+    )
+    s3_secret_key: str = Field(
+        default="devplanet",
+        description="S3 secret key (Scaleway SCW_SECRET_KEY or MinIO MINIO_ROOT_PASSWORD)",
+    )
+    s3_bucket_name: str = Field(
+        default="devplanet",
+        description="Bucket name that holds the planet-data.json file",
+    )
+    s3_region: str = Field(
+        default="us-east-1",
+        description="S3 region (use Scaleway region in prod, e.g. nl-ams)",
+    )
+    s3_planet_json_key: str = Field(
+        default="planet-data.json",
+        description="Object key for the planet snapshot file in the bucket",
+    )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins(self) -> list[str]:
