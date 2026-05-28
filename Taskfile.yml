@@ -67,18 +67,17 @@ tasks:
 
   shell:
     desc: >
-      POSIX shell in /app after pip install .[dev]; PYTHONPATH set. Run e.g.
-      ``python scripts/repl_db_example.py <login> --hours-ago 7``.
-      Prompt ``#`` is the shell; ``>>>`` means Python REPL (``exit()`` then retry, or ``task shell:python``).
+      Bash shell in /app with dev deps and PYTHONPATH set.
+      Supports tab-completion and history.
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && export PYTHONPATH=/app && exec sh"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && export PYTHONPATH=/app && exec bash"'
 
   shell:python:
     desc: Plain Python REPL (>>>); not for ``python script.py`` (use the shell task).
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app python"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app exec python"'
 
   shell:ipython:
     desc: Same env as shell, with IPython.
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} sh -lc "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app python -m IPython"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app exec python -m IPython"'
