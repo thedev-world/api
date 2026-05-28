@@ -78,10 +78,7 @@ class Settings(BaseSettings):
 
     s3_endpoint_url: str = Field(
         default="http://localhost:9000",
-        description=(
-            "S3-compatible endpoint URL. "
-            "Scaleway in prod, MinIO in local dev."
-        ),
+        description=("S3-compatible endpoint URL. Scaleway in prod, MinIO in local dev."),
     )
     s3_access_key: str = Field(
         default="devplanet",
