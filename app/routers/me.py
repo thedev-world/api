@@ -24,6 +24,7 @@ from app.schemas.sync_score import (
 )
 from app.services.developer_service import DeveloperService
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
+from app.workers.planet_task import update_planet_json
 
 logger = logging.getLogger(__name__)
 
@@ -129,4 +130,9 @@ async def me_sync_score(
     if isinstance(result, MeSyncCooldown):
         return _cooldown(result)
 
+    cells_changed = result.first_sync or (
+        result.progress is not None and result.progress.cell_after != result.progress.cell_before
+    )
+    if cells_changed:
+        update_planet_json.delay()
     return _performed(result)

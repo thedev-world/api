@@ -39,9 +39,17 @@ tasks:
       - "{{.COMPOSE}} build"
 
   dev:
-    desc: Postgres, Redis, API, Celery worker
+    desc: Start all services, create MinIO bucket, then follow logs
     cmds:
-      - "{{.COMPOSE}} up"
+      - "{{.COMPOSE}} up -d"
+      - task: minio:setup
+      - "{{.COMPOSE}} logs -f"
+
+  minio:setup:
+    desc: Create the MinIO bucket (safe to re-run, ignored if already exists)
+    cmds:
+      - "{{.COMPOSE}} exec minio mc alias set local http://localhost:9000 devplanet devplanet"
+      - "{{.COMPOSE}} exec minio mc mb --ignore-existing local/devplanet"
 
   down:
     desc: Stop containers
@@ -76,6 +84,11 @@ tasks:
     desc: Plain Python REPL (>>>); not for ``python script.py`` (use the shell task).
     cmds:
       - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app exec python"'
+
+  seed:
+    desc: "Seed fake developers (--count N, --clear). E.g.: task seed -- --count 1000 --clear"
+    cmds:
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} bash -c "cd /app && PYTHONPATH=/app python scripts/seed_fake_developers.py {{.CLI_ARGS}}"'
 
   shell:ipython:
     desc: Same env as shell, with IPython.

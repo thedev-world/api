@@ -13,6 +13,8 @@ _ENV_DEFAULTS: dict[str, str] = {
     "GITHUB_OAUTH_CLIENT_SECRET": "test-oauth-client-secret",
     "OAUTH_CALLBACK_URL": "http://test/api/v1/auth/github/callback",
     "ALLOWED_FRONTEND_ORIGINS": "http://localhost:3000,http://test",
+    "S3_ACCESS_KEY": "devplanet",
+    "S3_SECRET_KEY": "devplanet",
     "JWT_SECRET_KEY": "unit-test-jwt-secret-key-32-bytes-min",
 }
 
