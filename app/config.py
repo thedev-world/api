@@ -81,11 +81,9 @@ class Settings(BaseSettings):
         description=("S3-compatible endpoint URL. Scaleway in prod, MinIO in local dev."),
     )
     s3_access_key: str = Field(
-        default="devplanet",
         description="S3 access key (Scaleway SCW_ACCESS_KEY or MinIO MINIO_ROOT_USER)",
     )
     s3_secret_key: str = Field(
-        default="devplanet",
         description="S3 secret key (Scaleway SCW_SECRET_KEY or MinIO MINIO_ROOT_PASSWORD)",
     )
     s3_bucket_name: str = Field(
@@ -100,6 +98,28 @@ class Settings(BaseSettings):
         default="planet-data.json",
         description="Object key for the planet snapshot file in the bucket",
     )
+    s3_public_base_url: str = Field(
+        default="",
+        description=(
+            "Public base URL for S3 objects served to browsers "
+            "(e.g. CDN URL or http://localhost:9000 for MinIO in Docker). "
+            "If empty, falls back to s3_endpoint_url."
+        ),
+    )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_s3_public_base_url(self) -> str:
+        explicit = self.s3_public_base_url.strip().rstrip("/")
+        if explicit:
+            return explicit
+        return self.s3_endpoint_url.rstrip("/")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def planet_json_url(self) -> str:
+        base = self.effective_s3_public_base_url
+        return f"{base}/{self.s3_bucket_name}/{self.s3_planet_json_key}"
 
     @computed_field  # type: ignore[prop-decorator]
     @property

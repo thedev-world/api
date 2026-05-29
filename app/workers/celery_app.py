@@ -8,6 +8,7 @@ celery = Celery(
     "devplanet",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
+    include=["app.workers.planet_task"],
 )
 
 celery.conf.update(
