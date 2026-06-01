@@ -46,10 +46,11 @@ tasks:
       - "{{.COMPOSE}} logs -f"
 
   minio:setup:
-    desc: Create the MinIO bucket (safe to re-run, ignored if already exists)
+    desc: Create the MinIO bucket and set public-read policy (safe to re-run)
     cmds:
       - "{{.COMPOSE}} exec minio mc alias set local http://localhost:9000 devplanet devplanet"
       - "{{.COMPOSE}} exec minio mc mb --ignore-existing local/devplanet"
+      - "{{.COMPOSE}} exec minio mc anonymous set download local/devplanet"
 
   down:
     desc: Stop containers
