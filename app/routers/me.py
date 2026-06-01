@@ -57,6 +57,7 @@ async def complete_onboarding(
     service: Annotated[DeveloperService, Depends(get_developer_service)],
 ) -> DeveloperPublicResponse:
     updated = await service.complete_onboarding(db, developer)
+    update_planet_json.delay()
     return developer_public_from_orm(updated)
 
 
@@ -133,6 +134,6 @@ async def me_sync_score(
     cells_changed = result.first_sync or (
         result.progress is not None and result.progress.cell_after != result.progress.cell_before
     )
-    if cells_changed:
+    if cells_changed and developer.is_onboarded:
         update_planet_json.delay()
     return _performed(result)

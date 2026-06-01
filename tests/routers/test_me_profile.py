@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 import pytest
 from app.dependencies.auth import get_current_developer
@@ -123,10 +124,12 @@ async def test_post_onboarding_marks_developer_as_onboarded(api_client, _logged_
     app.dependency_overrides[get_developer_service] = lambda: _Svc()
 
     try:
-        resp = await api_client.post("/api/v1/me/onboarding")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["is_onboarded"] is True
-        assert data["island"] == "backend"
+        with patch("app.routers.me.update_planet_json") as mock_task:
+            resp = await api_client.post("/api/v1/me/onboarding")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["is_onboarded"] is True
+            assert data["island"] == "backend"
+            mock_task.delay.assert_called_once()
     finally:
         app.dependency_overrides.pop(get_developer_service, None)
