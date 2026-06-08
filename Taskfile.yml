@@ -16,22 +16,22 @@ tasks:
       task test -- tests/routers/test_health.py::test_health_returns_ok_when_database_check_succeeds
       or task test -- tests/services/test_health_service.py -vv
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app pytest {{.CLI_ARGS}}"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} pytest {{.CLI_ARGS}}'
 
   format:
     desc: Ruff format in the API container (app, alembic, tests)
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff format app alembic tests"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} ruff format app alembic tests'
 
   lint:
     desc: Ruff check in the API container
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff check app alembic tests"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} ruff check app alembic tests'
 
   lint:fix:
     desc: Ruff check --fix in the API container
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} sh -c "pip install -q ''.[dev]'' && ruff check --fix app alembic tests"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} ruff check --fix app alembic tests'
 
   build:
     desc: Build images
@@ -76,22 +76,22 @@ tasks:
 
   shell:
     desc: >
-      Bash shell in /app with dev deps and PYTHONPATH set.
+      Bash shell in /app with dev deps.
       Supports tab-completion and history.
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && export PYTHONPATH=/app && exec bash"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash'
 
   shell:python:
-    desc: Plain Python REPL (>>>); not for ``python script.py`` (use the shell task).
+    desc: Plain Python REPL (>>>).
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app exec python"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} python'
 
   seed:
     desc: "Seed fake developers (--count N, --clear). E.g.: task seed -- --count 1000 --clear"
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} bash -c "cd /app && PYTHONPATH=/app python scripts/seed_fake_developers.py {{.CLI_ARGS}}"'
+      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} python scripts/seed_fake_developers.py {{.CLI_ARGS}}'
 
   shell:ipython:
     desc: Same env as shell, with IPython.
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash -c "cd /app && pip install -q ''.[dev]'' && PYTHONPATH=/app exec python -m IPython"'
+      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} python -m IPython'

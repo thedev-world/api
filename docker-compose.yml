@@ -14,11 +14,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - devplanet-network
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - devplanet-network
 
   minio:
     image: minio/minio:latest
@@ -36,11 +40,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - devplanet-network
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     env_file:
       - .env
     ports:
@@ -57,11 +64,14 @@ services:
         condition: service_healthy
     command: >
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - devplanet-network
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     env_file:
       - .env
     volumes:
@@ -76,6 +86,12 @@ services:
         condition: service_healthy
     command: >
       celery -A app.workers.celery_app worker --loglevel=info
+    networks:
+      - devplanet-network
+
+networks:
+  devplanet-network:
+    external: true
 
 volumes:
   postgres_data:
