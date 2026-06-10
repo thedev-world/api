@@ -52,6 +52,7 @@ def update_planet_json() -> str:
         Bucket=settings.s3_bucket_name,
         Key=settings.s3_planet_json_key,
         Body=data,
+        ACL="public-read",
         ContentType="application/json",
     )
 
