@@ -90,7 +90,7 @@ tasks:
   seed:
     desc: "Seed fake developers (--count N, --clear). E.g.: task seed -- --count 1000 --clear"
     cmds:
-      - '{{.COMPOSE}} run --rm --no-deps {{.SERVICE_API}} python scripts/seed_fake_developers.py {{.CLI_ARGS}}'
+      - '{{.COMPOSE}} run --rm --no-deps -e PYTHONPATH=. {{.SERVICE_API}} python scripts/seed_fake_developers.py {{.CLI_ARGS}}'
 
   shell:ipython:
     desc: Same env as shell, with IPython.

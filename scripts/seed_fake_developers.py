@@ -36,6 +36,7 @@ from app.database import AsyncSessionLocal
 from app.domain.island import IslandChoice
 from app.domain.scoring import get_cell_count, get_level, get_player_class
 from app.models.developer import Developer
+from app.workers.planet_task import update_planet_json
 
 FAKE_LOGIN_PREFIX = "fake_dev_"
 
@@ -126,10 +127,13 @@ async def seed(count: int, clear: bool) -> None:
 
         rows = [_make_fake_developer(start_index + i, rng, now) for i in range(count)]
 
-        # Bulk upsert — skip if github_id already exists (idempotent).
-        stmt = insert(Developer).values(rows).on_conflict_do_nothing(index_elements=["github_id"])
-        await session.execute(stmt)
-        await session.commit()
+        batch_size = 500
+        for i in range(0, len(rows), batch_size):
+            batch = rows[i : i + batch_size]
+            stmt = insert(Developer).values(batch).on_conflict_do_nothing(index_elements=["github_id"])
+            await session.execute(stmt)
+            await session.commit()
+            print(f"  .. inserted batch {i//batch_size + 1}/{math.ceil(len(rows)/batch_size)}")
 
     # Print a quick summary.
     xps = [r["xp_brut"] for r in rows]  # type: ignore[index]
@@ -159,6 +163,8 @@ async def seed(count: int, clear: bool) -> None:
     print(f"Levels — min: {min(levels)}, avg: {sum(levels)//count}, max: {max(levels)}")
     print(f"Classes: { {c: classes.count(c) for c in sorted(set(classes))} }")
 
+    update_planet_json.delay()
+    print("Planet JSON updated successfully.")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
