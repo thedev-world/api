@@ -41,6 +41,7 @@ tasks:
   dev:
     desc: Start all services, create MinIO bucket, then follow logs
     cmds:
+      - docker network inspect devplanet-network >/dev/null 2>&1 || docker network create devplanet-network
       - "{{.COMPOSE}} up -d"
       - task: minio:setup
       - "{{.COMPOSE}} logs -f"
