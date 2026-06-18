@@ -30,6 +30,7 @@ def make_developer(**overrides: object) -> Developer:
         "last_sync_at": _ANCHOR,
         "island": None,
         "is_onboarded": False,
+        "avatar_url": None,
         "created_at": _ANCHOR,
         "updated_at": _ANCHOR,
     }

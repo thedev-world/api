@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.github import GitHubAPIError, GitHubClient
 from app.domain.datetime_github import parse_github_datetime
 from app.domain.github_inputs import GitHubScoreInputs
+from app.domain.github_profile import sync_avatar_url_from_profile
 from app.domain.score_snapshot import (
     GitHubPublicScoreSnapshot,
     SyncProgress,
@@ -85,7 +86,10 @@ class ScoreSyncService:
 
         needs_full_backfill = row is None or row.last_sync_at is None
         if needs_full_backfill:
-            inputs = await self._github.fetch_score_inputs(trimmed)
+            inputs, profile = await asyncio.gather(
+                self._github.fetch_score_inputs(trimmed),
+                self._github.fetch_public_user_profile(trimmed),
+            )
             stars_raw, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
             xp, _ = calculate_xp(inputs)
             if row is None:
@@ -121,6 +125,8 @@ class ScoreSyncService:
                 row.xp_brut = xp
                 row.last_sync_at = now
                 row.updated_at = now
+            target = row if row is not None else created
+            sync_avatar_url_from_profile(target, profile)
             await db.commit()
 
             snap = github_snapshot_from_inputs(trimmed, inputs)
@@ -178,6 +184,7 @@ class ScoreSyncService:
         xp, new_breakdown = calculate_xp(inputs)
         row.xp_brut = xp
 
+        sync_avatar_url_from_profile(row, profile)
         await db.commit()
 
         after_snap = github_snapshot_from_inputs(trimmed, inputs)

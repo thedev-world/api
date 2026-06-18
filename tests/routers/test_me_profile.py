@@ -29,6 +29,7 @@ def _sample_developer() -> Developer:
         last_sync_at=now,
         island=None,
         is_onboarded=False,
+        avatar_url=None,
         created_at=now,
         updated_at=now,
     )
