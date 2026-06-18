@@ -79,8 +79,9 @@ tasks:
     desc: >
       Bash shell in /app with dev deps.
       Supports tab-completion and history.
+      PYTHONPATH=/app so snippet/ and scripts/ can import app.
     cmds:
-      - '{{.COMPOSE}} run --rm -it --no-deps {{.SERVICE_API}} bash'
+      - '{{.COMPOSE}} run --rm -it --no-deps -e PYTHONPATH=/app {{.SERVICE_API}} bash'
 
   shell:python:
     desc: Plain Python REPL (>>>).
