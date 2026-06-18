@@ -40,6 +40,8 @@ class Developer(Base):
         Boolean, nullable=False, server_default="false", default=False
     )
 
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

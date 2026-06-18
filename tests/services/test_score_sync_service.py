@@ -57,17 +57,28 @@ async def test_first_sync_creates_and_commits() -> None:
         followers=7,
         account_created_at=anchor,
     )
+    avatar_url = "https://avatars.githubusercontent.com/u/99?v=4"
 
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
     gh.fetch_score_inputs = AsyncMock(return_value=inputs)
+    gh.fetch_public_user_profile = AsyncMock(
+        return_value={"id": 99, "login": "bob", "avatar_url": avatar_url}
+    )
     svc = ScoreSyncService(gh)
 
     with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
         repo = MagicMock()
         repo.get_by_github_id = AsyncMock(return_value=None)
-        repo.create = AsyncMock(side_effect=lambda d: d)
+        created_row = None
+
+        def _capture_create(row: object) -> object:
+            nonlocal created_row
+            created_row = row
+            return row
+
+        repo.create = AsyncMock(side_effect=_capture_create)
         RepoCls.return_value = repo
 
         with patch("app.services.score_sync_service.datetime", _patch_now(fixed_now)):
@@ -78,6 +89,8 @@ async def test_first_sync_creates_and_commits() -> None:
         assert out.progress is None
         assert out.snapshot.login == "bob"
         assert out.snapshot.xp >= 1
+        assert created_row is not None
+        assert created_row.avatar_url == avatar_url
         repo.create.assert_called_once()
         db.commit.assert_awaited_once()
 
@@ -96,6 +109,7 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
         followers=30,
         account_created_at=anchor,
     )
+    avatar_url = "https://avatars.githubusercontent.com/u/12345?v=4"
 
     oauth_row = make_developer(
         github_id=12345,
@@ -112,6 +126,13 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
     db.commit = AsyncMock()
     gh = MagicMock()
     gh.fetch_score_inputs = AsyncMock(return_value=inputs)
+    gh.fetch_public_user_profile = AsyncMock(
+        return_value={
+            "id": 12345,
+            "login": "ExampleUser",
+            "avatar_url": avatar_url,
+        }
+    )
     svc = ScoreSyncService(gh)
 
     with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
@@ -134,6 +155,7 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
         assert oauth_row.prs_contributions_alltime == 619
         assert oauth_row.reviews_alltime == 246
         assert oauth_row.last_sync_at == fixed_now
+        assert oauth_row.avatar_url == avatar_url
         db.commit.assert_awaited_once()
 
 
@@ -155,13 +177,16 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         xp_brut=0,
         owned_non_fork_repos_count=1,
         account_created_at=datetime(2014, 1, 1, tzinfo=UTC),
+        avatar_url="https://avatars.githubusercontent.com/u/777?v=3",
     )
+    new_avatar = "https://avatars.githubusercontent.com/u/777?v=4"
 
     profile = {
         "id": 777,
         "login": "carol",
         "created_at": "2014-01-01T00:00:00Z",
         "followers": 0,
+        "avatar_url": new_avatar,
     }
 
     db = MagicMock()
@@ -186,6 +211,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
 
         assert isinstance(out, MeSyncPerformed)
         assert out.first_sync is False
+        assert row.avatar_url == new_avatar
         assert out.progress is not None
         assert out.progress.xp_before == xp_before_incremental
         assert out.progress.xp_after == row.xp_brut == out.snapshot.xp
@@ -195,6 +221,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         assert out.progress.xp_progress_after == out.snapshot.xp_progress
         assert row.commits_alltime == 3
         assert row.stars_received_raw == 3
+        assert row.avatar_url == new_avatar
         gh.contributions_totals_between.assert_awaited_once_with(
             "carol",
             last_sync + timedelta(seconds=1),

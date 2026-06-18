@@ -35,6 +35,7 @@ class DeveloperPublicResponse(BaseModel):
     next_sync_at: datetime | None
     island: IslandChoice | None
     is_onboarded: bool
+    avatar_url: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -68,6 +69,7 @@ def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
         next_sync_at=row.last_sync_at + SYNC_COOLDOWN if row.last_sync_at else None,
         island=IslandChoice(row.island) if row.island else None,
         is_onboarded=row.is_onboarded,
+        avatar_url=row.avatar_url,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
