@@ -50,6 +50,8 @@ services:
       target: development
     env_file:
       - .env
+    environment:
+      PYTHONPATH: /app
     ports:
       - "8000:8000"
     volumes:
@@ -74,6 +76,8 @@ services:
       target: development
     env_file:
       - .env
+    environment:
+      PYTHONPATH: /app
     volumes:
       - .:/app
     working_dir: /app
