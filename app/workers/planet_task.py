@@ -54,6 +54,7 @@ def update_planet_json() -> str:
         Body=data,
         ACL="public-read",
         ContentType="application/json",
+        CacheControl="no-cache, no-store, must-revalidate",
     )
 
     logger.info("planet-data.json updated successfully.")
