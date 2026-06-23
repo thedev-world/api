@@ -95,6 +95,7 @@ def test_update_planet_json_uploads_to_s3() -> None:
     assert call_kwargs["Body"] == fake_data
     assert call_kwargs["ContentType"] == "application/json"
     assert call_kwargs["Key"] == "planet-data.json"
+    assert call_kwargs["CacheControl"] == "no-cache, no-store, must-revalidate"
 
 
 def test_update_planet_json_uses_correct_bucket() -> None:
