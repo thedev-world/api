@@ -42,6 +42,7 @@ RUN uv sync --no-dev --no-install-project
 COPY app ./app/
 COPY alembic ./alembic/
 COPY alembic.ini ./
+COPY scripts ./scripts/
 
 # Final sync for production (no-dev)
 RUN uv sync --no-dev
