@@ -105,6 +105,7 @@ class AuthService:
             created = Developer(
                 github_id=github_id,
                 github_login=login,
+                github_token=access_token,
                 account_created_at=account_created_at,
                 last_sync_at=None,
                 created_at=now,
@@ -116,8 +117,14 @@ class AuthService:
             return created
 
         now = datetime.now(tz=UTC)
+        updated = False
         if row.github_login != login:
             row.github_login = login
+            updated = True
+        if row.github_token != access_token:
+            row.github_token = access_token
+            updated = True
+        if updated:
             row.updated_at = now
             await db.commit()
         return row

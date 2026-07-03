@@ -48,16 +48,21 @@ class GitHubStatsFetcher(Protocol):
 
 
 class GitHubClient(GitHubStatsFetcher):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, *, token: str | None = None) -> None:
         self._settings = settings
+        self._token = token or settings.github_token
+
+    def with_token(self, token: str | None) -> GitHubClient:
+        """Return a new client using the given user token, falling back to the global one."""
+        return GitHubClient(self._settings, token=token)
 
     def _headers(self) -> dict[str, str]:
         h: dict[str, str] = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        if self._settings.github_token:
-            h["Authorization"] = f"Bearer {self._settings.github_token}"
+        if self._token:
+            h["Authorization"] = f"Bearer {self._token}"
         return h
 
     def _open_client(self) -> httpx.AsyncClient:

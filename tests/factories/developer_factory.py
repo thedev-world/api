@@ -17,6 +17,7 @@ def make_developer(**overrides: object) -> Developer:
         "id": _FIXED_ID,
         "github_id": 424242,
         "github_login": "testdev",
+        "github_token": None,
         "commits_alltime": 0,
         "prs_contributions_alltime": 0,
         "reviews_alltime": 0,
