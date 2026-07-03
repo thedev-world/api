@@ -27,6 +27,7 @@ async def test_sync_cooldown_returns_me_sync_cooldown() -> None:
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     svc = ScoreSyncService(gh)
 
     with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
@@ -62,6 +63,7 @@ async def test_first_sync_creates_and_commits() -> None:
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     gh.fetch_score_inputs = AsyncMock(return_value=inputs)
     gh.fetch_public_user_profile = AsyncMock(
         return_value={"id": 99, "login": "bob", "avatar_url": avatar_url}
@@ -125,6 +127,7 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     gh.fetch_score_inputs = AsyncMock(return_value=inputs)
     gh.fetch_public_user_profile = AsyncMock(
         return_value={
@@ -192,6 +195,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     gh.contributions_totals_between = AsyncMock(return_value=(2, 0, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((3,), 0))
@@ -276,6 +280,7 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     gh.contributions_totals_between = AsyncMock(return_value=(30, 8, 2))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
@@ -334,6 +339,7 @@ async def test_sync_for_github_login_resolves_id_from_profile() -> None:
     db = MagicMock()
     db.commit = AsyncMock()
     gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_score_inputs = AsyncMock(return_value=inputs)
     svc = ScoreSyncService(gh)
@@ -348,3 +354,91 @@ async def test_sync_for_github_login_resolves_id_from_profile() -> None:
             await svc.sync_for_github_login(db, github_login="Dave")
 
         repo.get_by_github_id.assert_awaited_once_with(314159)
+
+
+@pytest.mark.asyncio
+async def test_sync_for_actor_uses_stored_token_when_present() -> None:
+    """with_token() must be called with the token stored on the developer row."""
+    fixed_now = datetime(2035, 1, 1, tzinfo=UTC)
+    row = make_developer(
+        last_sync_at=None,
+        github_login="alice",
+        github_id=123,
+        github_token="stored_token",
+    )
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    user_gh = MagicMock()
+    user_gh.fetch_score_inputs = AsyncMock(
+        return_value=GitHubScoreInputs(
+            commits_alltime=0,
+            prs_contributions_alltime=0,
+            reviews_alltime=0,
+            stars_per_repo=(),
+            forks_received=0,
+            followers=0,
+            account_created_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+    )
+    user_gh.fetch_public_user_profile = AsyncMock(
+        return_value={"id": 123, "login": "alice", "created_at": "2020-01-01T00:00:00Z"}
+    )
+
+    gh = MagicMock()
+    gh.with_token = MagicMock(return_value=user_gh)
+    svc = ScoreSyncService(gh)
+
+    with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.get_by_github_id = AsyncMock(return_value=row)
+        RepoCls.return_value = repo
+
+        with patch("app.services.score_sync_service.datetime", _patch_now(fixed_now)):
+            await svc.sync_for_actor(db, github_id=123, login="alice")
+
+        gh.with_token.assert_called_once_with("stored_token")
+        user_gh.fetch_score_inputs.assert_awaited_once_with("alice")
+        user_gh.fetch_public_user_profile.assert_awaited_once_with("alice")
+
+
+@pytest.mark.asyncio
+async def test_sync_for_actor_uses_no_token_when_row_has_none() -> None:
+    """with_token(None) must be called when the row has no stored token."""
+    fixed_now = datetime(2035, 1, 1, tzinfo=UTC)
+    row = make_developer(last_sync_at=None, github_login="bob", github_id=456, github_token=None)
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    user_gh = MagicMock()
+    user_gh.fetch_score_inputs = AsyncMock(
+        return_value=GitHubScoreInputs(
+            commits_alltime=0,
+            prs_contributions_alltime=0,
+            reviews_alltime=0,
+            stars_per_repo=(),
+            forks_received=0,
+            followers=0,
+            account_created_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+    )
+    user_gh.fetch_public_user_profile = AsyncMock(
+        return_value={"id": 456, "login": "bob", "created_at": "2020-01-01T00:00:00Z"}
+    )
+
+    gh = MagicMock()
+    gh.with_token = MagicMock(return_value=user_gh)
+    svc = ScoreSyncService(gh)
+
+    with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.get_by_github_id = AsyncMock(return_value=row)
+        RepoCls.return_value = repo
+
+        with patch("app.services.score_sync_service.datetime", _patch_now(fixed_now)):
+            await svc.sync_for_actor(db, github_id=456, login="bob")
+
+        # None -> falls back to global token inside GitHubClient
+        gh.with_token.assert_called_once_with(None)

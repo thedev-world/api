@@ -77,6 +77,9 @@ class ScoreSyncService:
         now = datetime.now(tz=UTC)
 
         row = await repo.get_by_github_id(github_id)
+
+        github = self._github.with_token(row.github_token if row is not None else None)
+
         if row is not None and row.last_sync_at is not None:
             raw_last = row.last_sync_at
             last_sync = raw_last if raw_last.tzinfo else raw_last.replace(tzinfo=UTC)
@@ -87,8 +90,8 @@ class ScoreSyncService:
         needs_full_backfill = row is None or row.last_sync_at is None
         if needs_full_backfill:
             inputs, profile = await asyncio.gather(
-                self._github.fetch_score_inputs(trimmed),
-                self._github.fetch_public_user_profile(trimmed),
+                github.fetch_score_inputs(trimmed),
+                github.fetch_public_user_profile(trimmed),
             )
             stars_raw, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
             xp, _ = calculate_xp(inputs)
@@ -142,9 +145,9 @@ class ScoreSyncService:
         range_from = min(last + timedelta(seconds=1), now)
 
         (dc, dpr, drv), profile, (stars_per_repo, forks_received) = await asyncio.gather(
-            self._github.contributions_totals_between(trimmed, range_from, now),
-            self._github.fetch_public_user_profile(trimmed),
-            self._github.fetch_owner_repo_star_fork_totals(trimmed),
+            github.contributions_totals_between(trimmed, range_from, now),
+            github.fetch_public_user_profile(trimmed),
+            github.fetch_owner_repo_star_fork_totals(trimmed),
         )
         logger.debug(
             "incremental delta for %r range=[%s → %s]: commits=%d prs=%d reviews=%d",
