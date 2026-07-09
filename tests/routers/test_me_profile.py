@@ -125,12 +125,45 @@ async def test_post_onboarding_marks_developer_as_onboarded(api_client, _logged_
     app.dependency_overrides[get_developer_service] = lambda: _Svc()
 
     try:
-        with patch("app.routers.me.update_planet_json") as mock_task:
+        with (
+            patch("app.routers.me.update_planet_json") as mock_task,
+            patch("app.routers.me.celery"),
+        ):
             resp = await api_client.post("/api/v1/me/onboarding")
             assert resp.status_code == 200
             data = resp.json()
             assert data["is_onboarded"] is True
             assert data["island"] == "backend"
             mock_task.delay.assert_called_once()
+    finally:
+        app.dependency_overrides.pop(get_developer_service, None)
+
+
+@pytest.mark.asyncio
+async def test_post_onboarding_triggers_capture_task(api_client, _logged_in_alice) -> None:
+    """Completing onboarding must enqueue a capture for the developer's login."""
+    onboarded = _sample_developer()
+    onboarded.island = IslandChoice.BACKEND.value
+    onboarded.is_onboarded = True
+
+    class _Svc:
+        async def complete_onboarding(self, db, developer):
+            _ = (db, developer)
+            return onboarded
+
+    app.dependency_overrides[get_developer_service] = lambda: _Svc()
+
+    try:
+        with (
+            patch("app.routers.me.update_planet_json"),
+            patch("app.routers.me.celery") as mock_celery,
+        ):
+            resp = await api_client.post("/api/v1/me/onboarding")
+            assert resp.status_code == 200
+            mock_celery.send_task.assert_called_once_with(
+                "devplanet.workers.generate_profile_capture",
+                args=["alice"],
+                queue="capture",
+            )
     finally:
         app.dependency_overrides.pop(get_developer_service, None)
