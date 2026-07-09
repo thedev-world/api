@@ -24,6 +24,7 @@ from app.schemas.sync_score import (
 )
 from app.services.developer_service import DeveloperService
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
+from app.workers.celery_app import celery
 from app.workers.planet_task import update_planet_json
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ async def complete_onboarding(
 ) -> DeveloperPublicResponse:
     updated = await service.complete_onboarding(db, developer)
     update_planet_json.delay()
+    celery.send_task(
+        "devplanet.workers.generate_profile_capture",
+        args=[developer.github_login],
+        queue="capture",
+    )
     return developer_public_from_orm(updated)
 
 
@@ -136,4 +142,9 @@ async def me_sync_score(
     )
     if cells_changed and developer.is_onboarded:
         update_planet_json.delay()
+        celery.send_task(
+            "devplanet.workers.generate_profile_capture",
+            args=[developer.github_login],
+            queue="capture",
+        )
     return _performed(result)

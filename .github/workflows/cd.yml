@@ -10,7 +10,8 @@ on:
         required: true
 
 env:
-  IMAGE: ${{ secrets.SCW_REGISTRY }}/devplanet-api
+  IMAGE_API: ${{ secrets.SCW_REGISTRY }}/devplanet-api
+  IMAGE_CAPTURE: ${{ secrets.SCW_REGISTRY }}/devplanet-capture
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -32,15 +33,24 @@ jobs:
       - name: Log in to Scaleway registry
         run: echo "${{ secrets.SCW_SECRET_KEY }}" | docker login rg.fr-par.scw.cloud -u nologin --password-stdin
 
-      - name: Build image
+      - name: Build API image
         run: |
           docker build \
             --target production \
-            -t ${{ env.IMAGE }}:${{ steps.meta.outputs.tag_name }} \
+            -t ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }} \
             .
 
-      - name: Push image tags
-        run: docker push ${{ env.IMAGE }}:${{ steps.meta.outputs.tag_name }}
+      - name: Build capture image
+        run: |
+          docker build \
+            --target capture \
+            -t ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }} \
+            .
+
+      - name: Push images
+        run: |
+          docker push ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }}
+          docker push ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }}
 
   # ---------------------------------------------------------------------------
   # Deploy - Deploys to prod after build (release) or manually (dispatch)

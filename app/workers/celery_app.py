@@ -17,6 +17,9 @@ celery.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    task_routes={
+        "devplanet.workers.generate_profile_capture": {"queue": "capture"},
+    },
 )
 
 

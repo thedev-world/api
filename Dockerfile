@@ -30,6 +30,27 @@ COPY . .
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+# Capture Worker
+# Uses the official Playwright image which bundles Chromium + all system deps.
+FROM python:3.12-slim-bookworm AS capture
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    PATH="/venv/bin:$PATH"
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --extra capture && playwright install chromium --with-deps
+
+COPY . .
+
+CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--queues=capture", "--include=app.workers.capture_task"]
+
 # --- Production Stage ---
 # Optimized, lightweight, no dev deps, no tests
 FROM base AS production

@@ -89,7 +89,28 @@ services:
       minio:
         condition: service_healthy
     command: >
-      celery -A app.workers.celery_app worker --loglevel=info
+      celery -A app.workers.celery_app worker --loglevel=info --queues=celery
+    networks:
+      - devplanet-network
+
+  capture-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: capture
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - devplanet-network
 
