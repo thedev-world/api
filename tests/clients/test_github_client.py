@@ -96,3 +96,41 @@ async def test_contributions_totals_between_range_from_after_range_to_returns_ze
         )
     assert result == (0, 0, 0)
     mock_inner.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_profile_readme_returns_raw_markdown() -> None:
+    client = _make_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "# Hello\n\nWorld"
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(client, "_open_client", return_value=mock_http):
+        result = await client.fetch_profile_readme("alice")
+
+    assert result == "# Hello\n\nWorld"
+    mock_http.get.assert_awaited_once()
+    call_args = mock_http.get.await_args
+    assert call_args.args[0] == "/repos/alice/alice/readme"
+
+
+@pytest.mark.asyncio
+async def test_fetch_profile_readme_returns_none_on_404() -> None:
+    client = _make_client()
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+
+    mock_http = AsyncMock()
+    mock_http.get = AsyncMock(return_value=mock_response)
+    mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+    mock_http.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(client, "_open_client", return_value=mock_http):
+        result = await client.fetch_profile_readme("alice")
+
+    assert result is None

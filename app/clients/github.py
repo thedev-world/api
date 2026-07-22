@@ -31,8 +31,8 @@ class GitHubAPIError(Exception):
 
 
 GRAPHQL_SCORE_SLICE = """
-query ContributionSlice($login: String!, $from: DateTime!, $to: DateTime!) {
-  user(login: $login) {
+query ContributionSlice($from: DateTime!, $to: DateTime!) {
+  viewer {
     contributionsCollection(from: $from, to: $to) {
       totalCommitContributions
       totalPullRequestContributions
@@ -82,6 +82,22 @@ class GitHubClient(GitHubStatsFetcher):
         async with self._open_client() as client:
             return await self._fetch_user_profile(client, login)
 
+    async def fetch_profile_readme(self, login: str) -> str | None:
+        """Return raw markdown from the user's profile README repo, or None if missing."""
+        login = login.strip()
+        if not login:
+            raise InvalidGitHubLoginError()
+
+        async with self._open_client() as client:
+            r = await client.get(
+                f"/repos/{login}/{login}/readme",
+                headers={**self._headers(), "Accept": "application/vnd.github.raw"},
+            )
+            if r.status_code == 404:
+                return None
+            self._handle_rest_status(r, login)
+            return r.text
+
     async def contributions_totals_between(
         self,
         login: str,
@@ -122,16 +138,12 @@ class GitHubClient(GitHubStatsFetcher):
         payload = await self._graphql_request(
             client,
             GRAPHQL_SCORE_SLICE,
-            {
-                "login": login,
-                "from": _github_datetime(chunk_from),
-                "to": _github_datetime(chunk_to),
-            },
+            {"from": _github_datetime(chunk_from), "to": _github_datetime(chunk_to)},
         )
-        viewer_user = payload.get("user") if isinstance(payload, dict) else None
-        if viewer_user is None:
+        node = payload.get("viewer") if isinstance(payload, dict) else None
+        if node is None:
             raise GitHubUserNotFoundError(login)
-        cc = viewer_user.get("contributionsCollection") or {}
+        cc = node.get("contributionsCollection") or {}
         return (
             int(cc.get("totalCommitContributions", 0) or 0),
             int(cc.get("totalPullRequestContributions", 0) or 0),

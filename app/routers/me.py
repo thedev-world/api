@@ -4,13 +4,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.github import GitHubClient
 from app.database import get_db
 from app.dependencies.auth import get_current_developer
-from app.dependencies.providers import get_developer_service, get_score_sync_service
+from app.dependencies.providers import (
+    get_developer_service,
+    get_github_client,
+    get_score_sync_service,
+)
 from app.domain.score_snapshot import SyncProgress
 from app.models.developer import Developer
 from app.schemas.developer_public import DeveloperPublicResponse, developer_public_from_orm
 from app.schemas.developer_update import DeveloperProfileUpdateRequest
+from app.schemas.me_readme import MeReadmeResponse
 from app.schemas.score import (
     XpProgressSchema,
     public_score_response_from,
@@ -38,6 +44,18 @@ async def get_me(
     developer: Annotated[Developer, Depends(get_current_developer)],
 ) -> DeveloperPublicResponse:
     return developer_public_from_orm(developer)
+
+
+@router.get("/readme", response_model=MeReadmeResponse)
+async def get_me_readme(
+    developer: Annotated[Developer, Depends(get_current_developer)],
+    github: Annotated[GitHubClient, Depends(get_github_client)],
+) -> MeReadmeResponse:
+    client = github.with_token(developer.github_token)
+    content = await client.fetch_profile_readme(developer.github_login)
+    if content is None:
+        return MeReadmeResponse(content="", source="empty")
+    return MeReadmeResponse(content=content, source="github")
 
 
 @router.patch("", response_model=DeveloperPublicResponse)
