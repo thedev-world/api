@@ -32,26 +32,6 @@ def generate_profile_capture(github_login: str) -> str:
     url = f"{settings.frontend_internal_url}/capture?user={github_login}"
     key = f"{settings.s3_capture_key_prefix}{github_login}.jpg"
 
-    # GET /api/v1/planet returns a 302 to the public S3 base URL (localhost in dev),
-    # which is unreachable from inside the container. The worker already has direct S3
-    # access, so serve the planet JSON straight from the bucket and skip the redirect.
-    def handle_route(route) -> None:
-        if route.request.url.rstrip("/").endswith("/api/v1/planet"):
-            try:
-                obj = get_s3_client().get_object(
-                    Bucket=settings.s3_bucket_name,
-                    Key=settings.s3_planet_json_key,
-                )
-                route.fulfill(
-                    status=200,
-                    headers={"content-type": "application/json"},
-                    body=obj["Body"].read(),
-                )
-                return
-            except Exception:
-                logger.exception("Failed to serve planet JSON from S3")
-        route.continue_()
-
     logger.info("Capturing profile for %r -> %s", github_login, url)
 
     with _launch_playwright() as p:
@@ -75,7 +55,6 @@ def generate_profile_capture(github_login: str) -> str:
                 "requestfailed",
                 lambda req: logger.error("browser requestfailed: %s %s", req.url, req.failure),
             )
-            page.route("**/*", handle_route)
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => window.__PLANET_READY === true", timeout=30_000)
             screenshot = page.screenshot(type="jpeg", quality=85)
