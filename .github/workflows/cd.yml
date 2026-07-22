@@ -23,26 +23,32 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
-      capture_changed: ${{ steps.changes.outputs.capture }}
+      capture_changed: ${{ steps.meta.outputs.capture_changed }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Detect capture-related changes
-        uses: dorny/paths-filter@v3
-        id: changes
         with:
-          filters: |
-            capture:
-              - 'app/workers/capture_task.py'
-              - 'Dockerfile'
-              - 'pyproject.toml'
-              - 'uv.lock'
+          fetch-depth: 0
 
-      - name: Get tag info
+      - name: Get tag and check capture changes since last release
         id: meta
-        run: echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+        run: |
+          CURRENT="${{ github.event.release.tag_name }}"
+          PREV=$(git tag --sort=-v:refname | grep -Fxv "$CURRENT" | head -1 || true)
+          echo "tag_name=$CURRENT" >> $GITHUB_OUTPUT
+
+          CAPTURE_PATHS="app/workers/capture_task.py Dockerfile pyproject.toml uv.lock"
+          if [ -z "$PREV" ]; then
+            echo "No previous tag — building capture image."
+            echo "capture_changed=true" >> $GITHUB_OUTPUT
+          elif git diff --name-only "$PREV" "$CURRENT" | grep -qE '^(app/workers/capture_task\.py|Dockerfile|pyproject\.toml|uv\.lock)$'; then
+            echo "Capture changes detected between $PREV and $CURRENT."
+            echo "capture_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No capture changes between $PREV and $CURRENT — skipping."
+            echo "capture_changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Log in to Scaleway registry
         run: echo "${{ secrets.SCW_SECRET_KEY }}" | docker login rg.fr-par.scw.cloud -u nologin --password-stdin
@@ -55,7 +61,7 @@ jobs:
             .
 
       - name: Build capture image
-        if: steps.changes.outputs.capture == 'true'
+        if: steps.meta.outputs.capture_changed == 'true'
         run: |
           docker build \
             --target capture \
@@ -66,7 +72,7 @@ jobs:
         run: docker push ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }}
 
       - name: Push capture image
-        if: steps.changes.outputs.capture == 'true'
+        if: steps.meta.outputs.capture_changed == 'true'
         run: docker push ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }}
 
   # ---------------------------------------------------------------------------
