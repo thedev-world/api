@@ -27,7 +27,7 @@ def _launch_playwright():
     default_retry_delay=15,
 )
 def generate_profile_capture(github_login: str) -> str:
-    """Capture /capture?user=<login> with Playwright and upload the JPEG to S3."""
+    """Capture /capture?user=<login> with Playwright and upload the image to S3."""
     settings = get_settings()
     url = f"{settings.frontend_internal_url}/capture?user={github_login}"
     key = f"{settings.s3_capture_key_prefix}{github_login}.jpg"
