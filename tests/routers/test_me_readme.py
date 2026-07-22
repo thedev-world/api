@@ -2,8 +2,25 @@ from unittest.mock import AsyncMock
 
 import pytest
 from app.clients.github import GitHubClient
+from app.dependencies.auth import get_current_developer
 from app.dependencies.providers import get_github_client
 from app.main import app
+from app.models.developer import Developer
+
+
+@pytest.fixture
+def _logged_in_alice() -> None:
+    alice = Developer(
+        github_id=42,
+        github_login="alice",
+    )
+
+    async def _dev() -> Developer:
+        return alice
+
+    app.dependency_overrides[get_current_developer] = _dev
+    yield
+    app.dependency_overrides.pop(get_current_developer, None)
 
 
 @pytest.mark.asyncio
@@ -33,9 +50,7 @@ async def test_me_readme_returns_github_content(api_client, _logged_in_alice) ->
 
 
 @pytest.mark.asyncio
-async def test_me_readme_returns_empty_when_no_profile_repo(
-    api_client, _logged_in_alice
-) -> None:
+async def test_me_readme_returns_empty_when_no_profile_repo(api_client, _logged_in_alice) -> None:
     mock_github = AsyncMock(spec=GitHubClient)
     mock_github.with_token.return_value = mock_github
     mock_github.fetch_profile_readme = AsyncMock(return_value=None)

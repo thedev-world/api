@@ -68,6 +68,7 @@ def test_capture_task_navigates_to_capture_url() -> None:
     page.goto.assert_called_once()
     url_arg = page.goto.call_args.args[0]
     assert url_arg.endswith("/capture?user=octocat")
+    page.route.assert_not_called()
 
 
 def test_capture_task_waits_for_planet_ready_signal() -> None:
@@ -83,24 +84,6 @@ def test_capture_task_waits_for_planet_ready_signal() -> None:
     page.wait_for_function.assert_called_once()
     js_expr = page.wait_for_function.call_args.args[0]
     assert "__PLANET_READY" in js_expr
-
-
-def test_capture_task_registers_route_handler() -> None:
-    """Task must register a route handler so the planet JSON can be served from S3."""
-    ctx, _browser, page = _make_playwright_ctx()
-    s3 = _make_s3_mock()
-
-    with (
-        patch("app.workers.capture_task._launch_playwright", return_value=ctx),
-        patch("app.workers.capture_task.get_s3_client", return_value=s3),
-    ):
-        generate_profile_capture.run("octocat")
-
-    page.route.assert_called_once()
-    pattern_arg = page.route.call_args.args[0]
-    handler_arg = page.route.call_args.args[1]
-    assert pattern_arg == "**/*"
-    assert callable(handler_arg)
 
 
 def test_capture_task_closes_browser_on_error() -> None:

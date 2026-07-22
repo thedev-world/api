@@ -1,72 +1,42 @@
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from app.config import Settings, get_settings
-from app.main import app
+from botocore.exceptions import ClientError
 from httpx import AsyncClient
 
 
-def _make_settings(**overrides: str) -> Settings:
-    base = {
-        "s3_endpoint_url": "http://minio:9000",
-        "s3_public_base_url": "http://localhost:9000",
-        "s3_bucket_name": "devplanet",
-        "s3_planet_json_key": "planet-data.json",
-    }
-    base.update(overrides)
-    return Settings(**base)  # type: ignore[arg-type]
-
-
 @pytest.mark.asyncio
-async def test_get_planet_returns_302(api_client: AsyncClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: _make_settings()
+async def test_get_planet_returns_json_from_s3(api_client: AsyncClient) -> None:
+    payload = b'{"updated_at":"2026-01-01","islands":{}}'
+    body_mock = MagicMock()
+    body_mock.read.return_value = payload
 
-    resp = await api_client.get("/api/v1/planet", follow_redirects=False)
+    with patch("app.routers.planet.get_s3_client") as mock_s3:
+        mock_s3.return_value.get_object.return_value = {"Body": body_mock}
+        resp = await api_client.get("/api/v1/planet")
 
-    assert resp.status_code == 302
-
-
-@pytest.mark.asyncio
-async def test_get_planet_redirect_url_contains_key(api_client: AsyncClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: _make_settings()
-
-    resp = await api_client.get("/api/v1/planet", follow_redirects=False)
-
-    assert "planet-data.json" in resp.headers["location"]
-
-
-@pytest.mark.asyncio
-async def test_get_planet_redirect_uses_public_base_url(api_client: AsyncClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: _make_settings(
-        s3_public_base_url="https://cdn.example.com"
+    assert resp.status_code == 200
+    assert resp.content == payload
+    assert resp.headers["content-type"] == "application/json"
+    assert resp.headers["cache-control"] == "public, max-age=60"
+    mock_s3.return_value.get_object.assert_called_once_with(
+        Bucket="devplanet",
+        Key="planet-data.json",
     )
 
-    resp = await api_client.get("/api/v1/planet", follow_redirects=False)
-
-    assert resp.headers["location"].startswith("https://cdn.example.com")
-
 
 @pytest.mark.asyncio
-async def test_get_planet_falls_back_to_endpoint_url_when_public_url_empty(
-    api_client: AsyncClient,
-) -> None:
-    app.dependency_overrides[get_settings] = lambda: _make_settings(
-        s3_endpoint_url="http://minio:9000",
-        s3_public_base_url="",
+async def test_get_planet_returns_404_when_s3_object_missing(api_client: AsyncClient) -> None:
+    error = ClientError(
+        {"Error": {"Code": "NoSuchKey", "Message": "Not found"}},
+        "GetObject",
     )
 
-    resp = await api_client.get("/api/v1/planet", follow_redirects=False)
+    with patch("app.routers.planet.get_s3_client") as mock_s3:
+        mock_s3.return_value.get_object.side_effect = error
+        resp = await api_client.get("/api/v1/planet")
 
-    assert resp.headers["location"].startswith("http://minio:9000")
-
-
-@pytest.mark.asyncio
-async def test_get_planet_no_trailing_slash_in_redirect(api_client: AsyncClient) -> None:
-    app.dependency_overrides[get_settings] = lambda: _make_settings(
-        s3_public_base_url="http://localhost:9000/",
-    )
-
-    resp = await api_client.get("/api/v1/planet", follow_redirects=False)
-    location = resp.headers["location"]
-
-    assert "//" not in location.replace("http://", "").replace("https://", "")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Planet data not found"

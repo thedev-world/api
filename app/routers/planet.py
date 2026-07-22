@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse, RedirectResponse
+from botocore.exceptions import ClientError
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.s3 import get_s3_client
 from app.config import Settings, get_settings
 from app.database import get_db
 from app.repositories.planet_config import PlanetConfigRepository
@@ -32,10 +34,22 @@ async def get_planet_config(
     )
 
 
-@router.get("/planet", response_class=RedirectResponse, status_code=302)
-async def get_planet(
+@router.get("/planet")
+def get_planet(
     settings: Annotated[Settings, Depends(get_settings)],
-) -> RedirectResponse:
-    """Redirect to the static planet-data.json file on S3/CDN."""
-    url = settings.planet_json_url
-    return RedirectResponse(url=url, status_code=302)
+) -> Response:
+    try:
+        obj = get_s3_client().get_object(
+            Bucket=settings.s3_bucket_name, Key=settings.s3_planet_json_key
+        )
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"NoSuchKey", "404", "NoSuchBucket"}:
+            raise HTTPException(status_code=404, detail="Planet data not found") from exc
+        raise
+
+    return Response(
+        content=obj["Body"].read(),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=60"},
+    )
