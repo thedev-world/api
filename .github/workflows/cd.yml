@@ -21,10 +21,24 @@ jobs:
     if: github.event_name == 'release'
     name: Build & Push Release
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      capture_changed: ${{ steps.changes.outputs.capture }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Detect capture-related changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            capture:
+              - 'app/workers/capture_task.py'
+              - 'Dockerfile'
+              - 'pyproject.toml'
+              - 'uv.lock'
 
       - name: Get tag info
         id: meta
@@ -41,23 +55,25 @@ jobs:
             .
 
       - name: Build capture image
+        if: steps.changes.outputs.capture == 'true'
         run: |
           docker build \
             --target capture \
             -t ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }} \
             .
 
-      - name: Push images
-        run: |
-          docker push ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }}
-          docker push ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }}
+      - name: Push API image
+        run: docker push ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }}
+
+      - name: Push capture image
+        if: steps.changes.outputs.capture == 'true'
+        run: docker push ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }}
 
   # ---------------------------------------------------------------------------
   # Deploy - Deploys to prod after build (release) or manually (dispatch)
   # ---------------------------------------------------------------------------
   deploy:
     needs: build-and-push
-    # Execute if workflow is dispatched manually OR if release build-and-push succeeded
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' ||
@@ -70,12 +86,12 @@ jobs:
         id: meta
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${{ needs.build-and-push.outputs.tag_name }}" >> $GITHUB_OUTPUT
           else
             echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy via SSH
+      - name: Deploy API via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -83,3 +99,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             /opt/devplanet/devplanet-infra/scripts/deploy.sh api ${{ steps.meta.outputs.tag }}
+
+      - name: Deploy capture worker via SSH
+        if: github.event_name == 'release' && needs.build-and-push.outputs.capture_changed == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            /opt/devplanet/devplanet-infra/scripts/deploy.sh capture ${{ steps.meta.outputs.tag }}
