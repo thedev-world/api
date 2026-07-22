@@ -64,6 +64,7 @@ COPY app ./app/
 COPY alembic ./alembic/
 COPY alembic.ini ./
 COPY scripts ./scripts/
+COPY snippet ./snippet/
 
 # Final sync for production (no-dev)
 RUN uv sync --no-dev
