@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from cryptography.fernet import Fernet
-
 from app.config import Settings
 from app.core.token_encryption import (
     TokenDecryptionError,
@@ -10,6 +8,7 @@ from app.core.token_encryption import (
     encrypt_token,
     ensure_token_encrypted,
 )
+from cryptography.fernet import Fernet
 
 
 @pytest.fixture

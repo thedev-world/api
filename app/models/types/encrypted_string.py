@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from app.core.token_encryption import decrypt_token, encrypt_token
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator
-
-from app.core.token_encryption import decrypt_token, encrypt_token
 
 
 class EncryptedString(TypeDecorator[str | None]):
