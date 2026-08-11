@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from cryptography.fernet import Fernet, InvalidToken
-
 from app.config import Settings, get_settings
+from cryptography.fernet import Fernet, InvalidToken
 
 
 class TokenDecryptionError(Exception):
