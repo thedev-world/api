@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Self
 
+from cryptography.fernet import Fernet
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,6 +63,10 @@ class Settings(BaseSettings):
         min_length=32,
         description="HMAC secret for session JWT (use a long random string in production)",
     )
+    token_encryption_key: str = Field(
+        ...,
+        description="Fernet key for encrypting stored GitHub OAuth tokens",
+    )
     jwt_expires_seconds: int = Field(
         default=60 * 60 * 24 * 7,
         ge=60,
@@ -120,6 +125,12 @@ class Settings(BaseSettings):
             return explicit
         first = self.cors_origins[0].rstrip("/")
         return f"{first}/"
+
+    @field_validator("token_encryption_key")
+    @classmethod
+    def validate_token_encryption_key(cls, v: str) -> str:
+        Fernet(v.encode())
+        return v
 
     @field_validator("allowed_frontend_origins")
     @classmethod
