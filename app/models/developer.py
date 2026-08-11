@@ -7,6 +7,7 @@ from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, Uu
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
+from app.models.types.encrypted_string import EncryptedString
 
 
 class Developer(Base):
@@ -19,7 +20,7 @@ class Developer(Base):
     )
     github_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
     github_login: Mapped[str] = mapped_column(String(255), nullable=False)
-    github_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_token: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
 
     commits_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     prs_contributions_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

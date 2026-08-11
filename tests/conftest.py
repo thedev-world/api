@@ -16,6 +16,7 @@ _ENV_DEFAULTS: dict[str, str] = {
     "S3_ACCESS_KEY": "devplanet",
     "S3_SECRET_KEY": "devplanet",
     "JWT_SECRET_KEY": "unit-test-jwt-secret-key-32-bytes-min",
+    "TOKEN_ENCRYPTION_KEY": "UaFsQc-_TszKnclBK2EtbZy_-i88lwSAXRC1Cd4-kA0=",
 }
 
 
