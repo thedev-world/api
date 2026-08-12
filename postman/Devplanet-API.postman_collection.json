@@ -154,21 +154,6 @@
           "response": []
         }
       ]
-    },
-    {
-      "name": "GitHub score",
-      "item": [
-        {
-          "name": "GET /api/v1/github/:username/score",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/v1/github/{{githubUsername}}/score",
-            "description": "Public score by GitHub username (REST + GraphQL on server). Optional: set GITHUB_TOKEN in server .env for higher rate limits—not a Postman header unless you add a gateway."
-          },
-          "response": []
-        }
-      ]
     }
   ]
 }
