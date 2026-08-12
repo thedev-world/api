@@ -14,7 +14,6 @@ from app.routers.health import router as health_router
 from app.routers.me import router as me_router
 from app.routers.onboarding import router as onboarding_router
 from app.routers.planet import router as planet_router
-from app.routers.score_github import router as score_github_router
 from app.routers.user import router as user_router
 from app.routers.xp import router as xp_router
 
