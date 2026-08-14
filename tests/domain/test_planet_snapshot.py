@@ -62,6 +62,17 @@ def test_multiple_entries_same_island_preserve_order() -> None:
     assert logins == ["alpha", "beta", "gamma"]
 
 
+def test_same_island_preserves_signup_order() -> None:
+    entries = [
+        PlanetEntry(login="zebra", island_id="frontend", xp_brut=1_000),
+        PlanetEntry(login="alpha", island_id="frontend", xp_brut=2_000),
+    ]
+    payload = generate_planet_payload(entries)
+
+    logins = [row[0] for row in payload["islands"]["frontend"]]  # type: ignore[index]
+    assert logins == ["zebra", "alpha"]
+
+
 def test_entries_grouped_by_island() -> None:
     entries = [
         PlanetEntry(login="alice", island_id="frontend", xp_brut=1_000),
