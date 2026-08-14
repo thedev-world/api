@@ -138,33 +138,38 @@ class ScoreSyncService:
         prev_snap = github_snapshot_from_developer_row(trimmed, row)
         prev_breakdown = prev_snap.xp_breakdown
 
-        last = row.last_sync_at or row.created_at
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=UTC)
-        last = last.astimezone(UTC)
-        range_from = min(last + timedelta(seconds=1), now)
+        account_created_at = row.account_created_at
+        if account_created_at.tzinfo is None:
+            account_created_at = account_created_at.replace(tzinfo=UTC)
+        account_created_at = account_created_at.astimezone(UTC)
 
-        (dc, dpr, drv), profile, (stars_per_repo, forks_received) = await asyncio.gather(
-            github.contributions_totals_between(trimmed, range_from, now),
+        (
+            (fresh_commits, fresh_prs, fresh_reviews),
+            profile,
+            (stars_per_repo, forks_received),
+        ) = await asyncio.gather(
+            github.contributions_totals_between(trimmed, account_created_at, now),
             github.fetch_public_user_profile(trimmed),
             github.fetch_owner_repo_star_fork_totals(trimmed),
         )
         logger.debug(
-            "incremental delta for %r range=[%s → %s]: commits=%d prs=%d reviews=%d",
+            "incremental refresh for %r alltime from %s: commits %d→%d prs %d→%d reviews %d→%d",
             trimmed,
-            range_from.isoformat(),
-            now.isoformat(),
-            dc,
-            dpr,
-            drv,
+            account_created_at.isoformat(),
+            row.commits_alltime,
+            fresh_commits,
+            row.prs_contributions_alltime,
+            fresh_prs,
+            row.reviews_alltime,
+            fresh_reviews,
         )
 
         created_at = parse_github_datetime(str(profile["created_at"]))
         stars_raw, stars_capped = stars_after_single_repo_cap(stars_per_repo)
 
-        row.commits_alltime += dc
-        row.prs_contributions_alltime += dpr
-        row.reviews_alltime += drv
+        row.commits_alltime = fresh_commits
+        row.prs_contributions_alltime = fresh_prs
+        row.reviews_alltime = fresh_reviews
         row.followers = int(profile.get("followers", 0))
         row.forks_received = forks_received
         row.stars_received_raw = stars_raw
