@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from app.clients.github import GitHubClient
+from app.clients.github import GitHubAPIError, GitHubClient, GitHubUserNotFoundError
 
 
 def _make_client() -> GitHubClient:
@@ -134,3 +134,48 @@ async def test_fetch_profile_readme_returns_none_on_404() -> None:
         result = await client.fetch_profile_readme("alice")
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_contribution_totals_for_range_rejects_user_login_mismatch() -> None:
+    client = _make_client()
+    mock_http = AsyncMock()
+
+    with patch.object(
+        client,
+        "_graphql_request",
+        new=AsyncMock(
+            return_value={
+                "user": {
+                    "login": "wrong-user",
+                    "contributionsCollection": {
+                        "totalCommitContributions": 99,
+                        "totalPullRequestContributions": 0,
+                        "totalPullRequestReviewContributions": 0,
+                    },
+                }
+            }
+        ),
+    ):
+        with pytest.raises(GitHubAPIError, match="does not match requested login"):
+            await client._contribution_totals_for_range(
+                mock_http,
+                "alice",
+                datetime(2026, 1, 1, tzinfo=UTC),
+                datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC),
+            )
+
+
+@pytest.mark.asyncio
+async def test_contribution_totals_for_range_raises_when_user_missing() -> None:
+    client = _make_client()
+    mock_http = AsyncMock()
+
+    with patch.object(client, "_graphql_request", new=AsyncMock(return_value={"user": None})):
+        with pytest.raises(GitHubUserNotFoundError):
+            await client._contribution_totals_for_range(
+                mock_http,
+                "missing-user",
+                datetime(2026, 1, 1, tzinfo=UTC),
+                datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC),
+            )

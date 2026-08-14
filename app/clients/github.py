@@ -31,8 +31,9 @@ class GitHubAPIError(Exception):
 
 
 GRAPHQL_SCORE_SLICE = """
-query ContributionSlice($from: DateTime!, $to: DateTime!) {
-  viewer {
+query ContributionSlice($login: String!, $from: DateTime!, $to: DateTime!) {
+  user(login: $login) {
+    login
     contributionsCollection(from: $from, to: $to) {
       totalCommitContributions
       totalPullRequestContributions
@@ -138,11 +139,20 @@ class GitHubClient(GitHubStatsFetcher):
         payload = await self._graphql_request(
             client,
             GRAPHQL_SCORE_SLICE,
-            {"from": _github_datetime(chunk_from), "to": _github_datetime(chunk_to)},
+            {
+                "login": login,
+                "from": _github_datetime(chunk_from),
+                "to": _github_datetime(chunk_to),
+            },
         )
-        node = payload.get("viewer") if isinstance(payload, dict) else None
+        node = payload.get("user") if isinstance(payload, dict) else None
         if node is None:
             raise GitHubUserNotFoundError(login)
+        resolved_login = node.get("login")
+        if isinstance(resolved_login, str) and resolved_login.lower() != login.lower():
+            raise GitHubAPIError(
+                f"GitHub user login {resolved_login!r} does not match requested login {login!r}"
+            )
         cc = node.get("contributionsCollection") or {}
         return (
             int(cc.get("totalCommitContributions", 0) or 0),

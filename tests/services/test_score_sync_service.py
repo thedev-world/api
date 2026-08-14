@@ -223,12 +223,12 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         assert out.progress.cell_after == out.snapshot.cell_count
         assert out.progress.xp_progress_before == get_xp_progress(xp_before_incremental)
         assert out.progress.xp_progress_after == out.snapshot.xp_progress
-        assert row.commits_alltime == 3
+        assert row.commits_alltime == 2
         assert row.stars_received_raw == 3
         assert row.avatar_url == new_avatar
         gh.contributions_totals_between.assert_awaited_once_with(
             "carol",
-            last_sync + timedelta(seconds=1),
+            datetime(2014, 1, 1, tzinfo=UTC),
             frozen_now,
         )
         b = out.progress
@@ -239,7 +239,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         delta_forks = b.breakdown_after.from_forks - b.breakdown_before.from_forks
         delta_followers = b.breakdown_after.from_followers - b.breakdown_before.from_followers
         delta_tenure = b.breakdown_after.from_tenure - b.breakdown_before.from_tenure
-        assert delta_commits == 20
+        assert delta_commits == 10
         assert delta_prs == 0
         assert delta_reviews == 0
         assert delta_stars == 150
@@ -281,7 +281,7 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
     db.commit = AsyncMock()
     gh = MagicMock()
     gh.with_token = MagicMock(return_value=gh)
-    gh.contributions_totals_between = AsyncMock(return_value=(30, 8, 2))
+    gh.contributions_totals_between = AsyncMock(return_value=(80, 18, 7))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
 
@@ -297,15 +297,14 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
             out = await svc.sync_for_actor(db, github_id=888, login="eve")
 
         assert isinstance(out, MeSyncPerformed)
-        expected_range_from = last_sync + timedelta(seconds=1)
         gh.contributions_totals_between.assert_awaited_once_with(
             "eve",
-            expected_range_from,
+            datetime(2018, 1, 1, tzinfo=UTC),
             frozen_now,
         )
-        assert row.commits_alltime == 50 + 30
-        assert row.prs_contributions_alltime == 10 + 8
-        assert row.reviews_alltime == 5 + 2
+        assert row.commits_alltime == 80
+        assert row.prs_contributions_alltime == 18
+        assert row.reviews_alltime == 7
         b = out.progress
         delta_commits = b.breakdown_after.from_commits - b.breakdown_before.from_commits
         delta_prs = b.breakdown_after.from_pull_requests - b.breakdown_before.from_pull_requests
