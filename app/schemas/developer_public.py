@@ -21,6 +21,7 @@ class DeveloperPublicResponse(BaseModel):
     commits_alltime: int
     prs_contributions_alltime: int
     reviews_alltime: int
+    private_contributions_alltime: int
     forks_received: int
     followers: int
     stars_received_raw: int
@@ -50,6 +51,7 @@ def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
         commits_alltime=row.commits_alltime,
         prs_contributions_alltime=row.prs_contributions_alltime,
         reviews_alltime=row.reviews_alltime,
+        private_contributions_alltime=row.private_contributions_alltime,
         forks_received=row.forks_received,
         followers=row.followers,
         stars_received_raw=row.stars_received_raw,

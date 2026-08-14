@@ -12,6 +12,7 @@ class ScoreXpBreakdownSchema(BaseModel):
     from_commits: int = Field(serialization_alias="commits")
     from_pull_requests: int = Field(serialization_alias="pull_requests")
     from_reviews: int = Field(serialization_alias="reviews")
+    from_private_contributions: int = Field(serialization_alias="private_activity")
     from_stars: int = Field(serialization_alias="stars")
     from_forks: int = Field(serialization_alias="forks")
     from_followers: int = Field(serialization_alias="followers")
@@ -53,6 +54,10 @@ class GitHubAggregatesPublicSchema(BaseModel):
         description="GitHub totalPullRequestContributions (opened PRs; merges not guaranteed).",
     )
     reviews_alltime: int
+    private_contributions_alltime: int = Field(
+        ...,
+        description="GitHub restrictedContributionsCount.",
+    )
     forks_received_on_owned_repos: int
     followers: int
     years_on_github: int
@@ -90,6 +95,7 @@ def public_score_response_from(snapshot: GitHubPublicScoreSnapshot) -> GitHubPub
             from_commits=b.from_commits,
             from_pull_requests=b.from_pull_requests,
             from_reviews=b.from_reviews,
+            from_private_contributions=b.from_private_contributions,
             from_stars=b.from_stars,
             from_forks=b.from_forks,
             from_followers=b.from_followers,
@@ -107,6 +113,7 @@ def public_score_response_from(snapshot: GitHubPublicScoreSnapshot) -> GitHubPub
             commits_alltime=inp.commits_alltime,
             prs_contributions_alltime=inp.prs_contributions_alltime,
             reviews_alltime=inp.reviews_alltime,
+            private_contributions_alltime=inp.private_contributions_alltime,
             forks_received_on_owned_repos=inp.forks_received,
             followers=inp.followers,
             years_on_github=github_account_age_full_years(inp.account_created_at),

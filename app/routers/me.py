@@ -111,6 +111,8 @@ def _map_sync_progress(progress: SyncProgress) -> ScoreSyncProgressSchema:
             commits=b_after.from_commits - b_before.from_commits,
             pull_requests=b_after.from_pull_requests - b_before.from_pull_requests,
             reviews=b_after.from_reviews - b_before.from_reviews,
+            private_activity=b_after.from_private_contributions
+            - b_before.from_private_contributions,
             stars=b_after.from_stars - b_before.from_stars,
             forks=b_after.from_forks - b_before.from_forks,
             followers=b_after.from_followers - b_before.from_followers,

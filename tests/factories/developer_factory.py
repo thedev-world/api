@@ -21,6 +21,7 @@ def make_developer(**overrides: object) -> Developer:
         "commits_alltime": 0,
         "prs_contributions_alltime": 0,
         "reviews_alltime": 0,
+        "private_contributions_alltime": 0,
         "forks_received": 0,
         "followers": 0,
         "stars_received_raw": 0,
