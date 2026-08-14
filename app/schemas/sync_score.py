@@ -16,6 +16,7 @@ class ScoreXpBreakdownDeltaSchema(BaseModel):
     commits: int
     pull_requests: int
     reviews: int
+    private_activity: int
     stars: int
     forks: int
     followers: int

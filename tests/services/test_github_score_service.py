@@ -21,6 +21,7 @@ async def test_service_build_snapshot_reflects_github_inputs() -> None:
         commits_alltime=1,
         prs_contributions_alltime=1,
         reviews_alltime=1,
+        private_contributions_alltime=0,
         stars_per_repo=(10,),
         forks_received=2,
         followers=3,

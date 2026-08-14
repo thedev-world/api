@@ -102,6 +102,7 @@ class ScoreSyncService:
                     commits_alltime=inputs.commits_alltime,
                     prs_contributions_alltime=inputs.prs_contributions_alltime,
                     reviews_alltime=inputs.reviews_alltime,
+                    private_contributions_alltime=inputs.private_contributions_alltime,
                     forks_received=inputs.forks_received,
                     followers=inputs.followers,
                     stars_received_raw=stars_raw,
@@ -118,6 +119,7 @@ class ScoreSyncService:
                 row.commits_alltime = inputs.commits_alltime
                 row.prs_contributions_alltime = inputs.prs_contributions_alltime
                 row.reviews_alltime = inputs.reviews_alltime
+                row.private_contributions_alltime = inputs.private_contributions_alltime
                 row.forks_received = inputs.forks_received
                 row.followers = inputs.followers
                 row.stars_received_raw = stars_raw
@@ -144,7 +146,7 @@ class ScoreSyncService:
         account_created_at = account_created_at.astimezone(UTC)
 
         (
-            (fresh_commits, fresh_prs, fresh_reviews),
+            (fresh_commits, fresh_prs, fresh_reviews, fresh_private),
             profile,
             (stars_per_repo, forks_received),
         ) = await asyncio.gather(
@@ -153,7 +155,8 @@ class ScoreSyncService:
             github.fetch_owner_repo_star_fork_totals(trimmed),
         )
         logger.debug(
-            "incremental refresh for %r alltime from %s: commits %d→%d prs %d→%d reviews %d→%d",
+            "incremental refresh for %r alltime from %s: commits %d→%d prs %d→%d \
+            reviews %d→%d private %d→%d",
             trimmed,
             account_created_at.isoformat(),
             row.commits_alltime,
@@ -162,6 +165,8 @@ class ScoreSyncService:
             fresh_prs,
             row.reviews_alltime,
             fresh_reviews,
+            row.private_contributions_alltime,
+            fresh_private,
         )
 
         created_at = parse_github_datetime(str(profile["created_at"]))
@@ -170,6 +175,7 @@ class ScoreSyncService:
         row.commits_alltime = fresh_commits
         row.prs_contributions_alltime = fresh_prs
         row.reviews_alltime = fresh_reviews
+        row.private_contributions_alltime = fresh_private
         row.followers = int(profile.get("followers", 0))
         row.forks_received = forks_received
         row.stars_received_raw = stars_raw
@@ -184,6 +190,7 @@ class ScoreSyncService:
             commits_alltime=row.commits_alltime,
             prs_contributions_alltime=row.prs_contributions_alltime,
             reviews_alltime=row.reviews_alltime,
+            private_contributions_alltime=row.private_contributions_alltime,
             stars_per_repo=stars_per_repo,
             forks_received=forks_received,
             followers=int(profile.get("followers", 0)),

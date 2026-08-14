@@ -38,6 +38,7 @@ query ContributionSlice($login: String!, $from: DateTime!, $to: DateTime!) {
       totalCommitContributions
       totalPullRequestContributions
       totalPullRequestReviewContributions
+      restrictedContributionsCount
     }
   }
 }
@@ -104,17 +105,19 @@ class GitHubClient(GitHubStatsFetcher):
         login: str,
         range_from: datetime,
         range_to: datetime,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         """Sum contribution counts for [range_from, range_to] with per-calendar-year GraphQL calls.
 
         GitHub clamps ``from`` to within one year of ``to`` on a single query; slicing avoids loss.
         All year-slices are fired in parallel via asyncio.gather.
+
+        Returns (commits, prs, reviews, private_contributions).
         """
         login = login.strip()
         if not login:
             raise InvalidGitHubLoginError()
         if range_from > range_to:
-            return (0, 0, 0)
+            return (0, 0, 0, 0)
 
         async with self._open_client() as client:
             return await self._contributions_year_slices_between(
@@ -154,10 +157,15 @@ class GitHubClient(GitHubStatsFetcher):
                 f"GitHub user login {resolved_login!r} does not match requested login {login!r}"
             )
         cc = node.get("contributionsCollection") or {}
+        public_commits = int(cc.get("totalCommitContributions", 0) or 0)
+        # Private/internal activity the token cannot detail is exposed only as an aggregate
+        # count when the user enabled "private contributions" on their GitHub profile.
+        restricted = int(cc.get("restrictedContributionsCount", 0) or 0)
         return (
-            int(cc.get("totalCommitContributions", 0) or 0),
+            public_commits,
             int(cc.get("totalPullRequestContributions", 0) or 0),
             int(cc.get("totalPullRequestReviewContributions", 0) or 0),
+            restricted,
         )
 
     async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
@@ -170,7 +178,10 @@ class GitHubClient(GitHubStatsFetcher):
             created_at = parse_github_datetime(profile["created_at"])
             public_repos: int | None = profile.get("public_repos")
 
-            (commits, prs, reviews), (stars_per_repo, forks_received) = await asyncio.gather(
+            (
+                (commits, prs, reviews, private),
+                (stars_per_repo, forks_received),
+            ) = await asyncio.gather(
                 self._contributions_year_slices(client, login, created_at),
                 self._repos_aggregates(client, login, total_repos_hint=public_repos),
             )
@@ -179,6 +190,7 @@ class GitHubClient(GitHubStatsFetcher):
                 commits_alltime=commits,
                 prs_contributions_alltime=prs,
                 reviews_alltime=reviews,
+                private_contributions_alltime=private,
                 stars_per_repo=stars_per_repo,
                 forks_received=forks_received,
                 followers=int(profile.get("followers", 0)),
@@ -198,7 +210,7 @@ class GitHubClient(GitHubStatsFetcher):
         client: httpx.AsyncClient,
         login: str,
         created_at: datetime,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         now = datetime.now(tz=UTC)
         return await self._contributions_year_slices_between(client, login, created_at, now)
 
@@ -208,7 +220,7 @@ class GitHubClient(GitHubStatsFetcher):
         login: str,
         range_from: datetime,
         range_to: datetime,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         """Fire one GraphQL query per calendar year in parallel and aggregate results."""
         chunks: list[tuple[datetime, datetime]] = []
         for year in range(range_from.year, range_to.year + 1):
@@ -219,7 +231,7 @@ class GitHubClient(GitHubStatsFetcher):
             chunks.append((chunk_from, chunk_to))
 
         if not chunks:
-            return (0, 0, 0)
+            return (0, 0, 0, 0)
 
         results = await asyncio.gather(
             *[self._contribution_totals_for_range(client, login, cf, ct) for cf, ct in chunks]
@@ -227,7 +239,8 @@ class GitHubClient(GitHubStatsFetcher):
         total_commits = sum(r[0] for r in results)
         total_prs = sum(r[1] for r in results)
         total_reviews = sum(r[2] for r in results)
-        return (total_commits, total_prs, total_reviews)
+        total_private = sum(r[3] for r in results)
+        return (total_commits, total_prs, total_reviews, total_private)
 
     async def _repos_aggregates(
         self,

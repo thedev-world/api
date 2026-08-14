@@ -53,6 +53,7 @@ async def test_first_sync_creates_and_commits() -> None:
         commits_alltime=10,
         prs_contributions_alltime=0,
         reviews_alltime=0,
+        private_contributions_alltime=0,
         stars_per_repo=(5,),
         forks_received=1,
         followers=7,
@@ -106,6 +107,7 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
         commits_alltime=2853,
         prs_contributions_alltime=619,
         reviews_alltime=246,
+        private_contributions_alltime=0,
         stars_per_repo=(9,),
         forks_received=2,
         followers=30,
@@ -196,7 +198,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
     db.commit = AsyncMock()
     gh = MagicMock()
     gh.with_token = MagicMock(return_value=gh)
-    gh.contributions_totals_between = AsyncMock(return_value=(2, 0, 0))
+    gh.contributions_totals_between = AsyncMock(return_value=(2, 0, 0, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((3,), 0))
 
@@ -281,7 +283,7 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
     db.commit = AsyncMock()
     gh = MagicMock()
     gh.with_token = MagicMock(return_value=gh)
-    gh.contributions_totals_between = AsyncMock(return_value=(80, 18, 7))
+    gh.contributions_totals_between = AsyncMock(return_value=(80, 18, 7, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
 
@@ -321,6 +323,7 @@ async def test_sync_for_github_login_resolves_id_from_profile() -> None:
         commits_alltime=0,
         prs_contributions_alltime=0,
         reviews_alltime=0,
+        private_contributions_alltime=0,
         stars_per_repo=(),
         forks_received=0,
         followers=0,
@@ -375,6 +378,7 @@ async def test_sync_for_actor_uses_stored_token_when_present() -> None:
             commits_alltime=0,
             prs_contributions_alltime=0,
             reviews_alltime=0,
+            private_contributions_alltime=0,
             stars_per_repo=(),
             forks_received=0,
             followers=0,
@@ -417,6 +421,7 @@ async def test_sync_for_actor_uses_no_token_when_row_has_none() -> None:
             commits_alltime=0,
             prs_contributions_alltime=0,
             reviews_alltime=0,
+            private_contributions_alltime=0,
             stars_per_repo=(),
             forks_received=0,
             followers=0,

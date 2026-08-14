@@ -14,7 +14,7 @@ def _make_client() -> GitHubClient:
     return GitHubClient(settings)
 
 
-def _patch_totals_for_range(return_values: list[tuple[int, int, int]]) -> MagicMock:
+def _patch_totals_for_range(return_values: list[tuple[int, int, int, int]]) -> MagicMock:
     return AsyncMock(side_effect=return_values)
 
 
@@ -24,11 +24,11 @@ async def test_contributions_totals_between_within_one_year() -> None:
     range_from = datetime(2026, 1, 15, tzinfo=UTC)
     range_to = datetime(2026, 5, 5, tzinfo=UTC)
 
-    mock_inner = _patch_totals_for_range([(7, 3, 1)])
+    mock_inner = _patch_totals_for_range([(7, 3, 1, 0)])
     with patch.object(client, "_contribution_totals_for_range", new=mock_inner):
         result = await client.contributions_totals_between("alice", range_from, range_to)
 
-    assert result == (7, 3, 1)
+    assert result == (7, 3, 1, 0)
     mock_inner.assert_awaited_once()
     _, args, _ = mock_inner.mock_calls[0]
     assert args[2] == range_from
@@ -41,11 +41,11 @@ async def test_contributions_totals_between_crossing_year_boundary() -> None:
     range_from = datetime(2025, 12, 20, tzinfo=UTC)
     range_to = datetime(2026, 5, 5, tzinfo=UTC)
 
-    mock_inner = _patch_totals_for_range([(5, 2, 0), (10, 4, 1)])
+    mock_inner = _patch_totals_for_range([(5, 2, 0, 0), (10, 4, 1, 3)])
     with patch.object(client, "_contribution_totals_for_range", new=mock_inner):
         result = await client.contributions_totals_between("alice", range_from, range_to)
 
-    assert result == (15, 6, 1)
+    assert result == (15, 6, 1, 3)
     assert mock_inner.await_count == 2
 
     calls = mock_inner.mock_calls
@@ -63,11 +63,11 @@ async def test_contributions_totals_between_spanning_more_than_one_year() -> Non
     range_from = datetime(2024, 6, 1, tzinfo=UTC)
     range_to = datetime(2026, 5, 5, tzinfo=UTC)
 
-    mock_inner = _patch_totals_for_range([(20, 5, 2), (50, 10, 4), (8, 3, 1)])
+    mock_inner = _patch_totals_for_range([(20, 5, 2, 1), (50, 10, 4, 5), (8, 3, 1, 0)])
     with patch.object(client, "_contribution_totals_for_range", new=mock_inner):
         result = await client.contributions_totals_between("alice", range_from, range_to)
 
-    assert result == (78, 18, 7)
+    assert result == (78, 18, 7, 6)
     assert mock_inner.await_count == 3
 
     calls = mock_inner.mock_calls
@@ -94,7 +94,7 @@ async def test_contributions_totals_between_range_from_after_range_to_returns_ze
             datetime(2026, 5, 5, tzinfo=UTC),
             datetime(2026, 1, 1, tzinfo=UTC),
         )
-    assert result == (0, 0, 0)
+    assert result == (0, 0, 0, 0)
     mock_inner.assert_not_awaited()
 
 
@@ -152,6 +152,7 @@ async def test_contribution_totals_for_range_rejects_user_login_mismatch() -> No
                         "totalCommitContributions": 99,
                         "totalPullRequestContributions": 0,
                         "totalPullRequestReviewContributions": 0,
+                        "restrictedContributionsCount": 0,
                     },
                 }
             }
@@ -179,3 +180,35 @@ async def test_contribution_totals_for_range_raises_when_user_missing() -> None:
                 datetime(2026, 1, 1, tzinfo=UTC),
                 datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC),
             )
+
+
+@pytest.mark.asyncio
+async def test_contribution_totals_for_range_includes_restricted_private_commits() -> None:
+    client = _make_client()
+    mock_http = AsyncMock()
+
+    with patch.object(
+        client,
+        "_graphql_request",
+        new=AsyncMock(
+            return_value={
+                "user": {
+                    "login": "alice",
+                    "contributionsCollection": {
+                        "totalCommitContributions": 4,
+                        "totalPullRequestContributions": 1,
+                        "totalPullRequestReviewContributions": 0,
+                        "restrictedContributionsCount": 2,
+                    },
+                }
+            }
+        ),
+    ):
+        result = await client._contribution_totals_for_range(
+            mock_http,
+            "alice",
+            datetime(2026, 1, 1, tzinfo=UTC),
+            datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC),
+        )
+
+    assert result == (4, 1, 0, 2)

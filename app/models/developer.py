@@ -25,6 +25,7 @@ class Developer(Base):
     commits_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     prs_contributions_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reviews_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    private_contributions_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     forks_received: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     followers: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

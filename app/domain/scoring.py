@@ -15,6 +15,7 @@ class XpBreakdownContribution:
     from_commits: int
     from_pull_requests: int
     from_reviews: int
+    from_private_contributions: int
     from_stars: int
     from_forks: int
     from_followers: int
@@ -54,6 +55,7 @@ def xp_breakdown_from_persisted_components(
     commits_alltime: int,
     prs_contributions_alltime: int,
     reviews_alltime: int,
+    private_contributions_alltime: int,
     stars_received_capped: int,
     forks_received: int,
     followers: int,
@@ -63,6 +65,7 @@ def xp_breakdown_from_persisted_components(
     b_commits = commits_alltime * 10
     b_prs = prs_contributions_alltime * 30
     b_reviews = reviews_alltime * 15
+    b_private = private_contributions_alltime * 20
     b_stars = stars_received_capped * 50
     b_forks = forks_received * 40
     followers_for_xp = min(followers, FOLLOWERS_COUNT_CAP_FOR_XP)
@@ -73,6 +76,7 @@ def xp_breakdown_from_persisted_components(
         from_commits=b_commits,
         from_pull_requests=b_prs,
         from_reviews=b_reviews,
+        from_private_contributions=b_private,
         from_stars=b_stars,
         from_forks=b_forks,
         from_followers=b_follow,
@@ -88,6 +92,7 @@ def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContributio
         commits_alltime=inputs.commits_alltime,
         prs_contributions_alltime=inputs.prs_contributions_alltime,
         reviews_alltime=inputs.reviews_alltime,
+        private_contributions_alltime=inputs.private_contributions_alltime,
         stars_received_capped=stars_capped,
         forks_received=inputs.forks_received,
         followers=inputs.followers,
@@ -98,6 +103,7 @@ def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContributio
         breakdown.from_commits
         + breakdown.from_pull_requests
         + breakdown.from_reviews
+        + breakdown.from_private_contributions
         + breakdown.from_stars
         + breakdown.from_forks
         + breakdown.from_followers
