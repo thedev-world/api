@@ -10,6 +10,7 @@ import httpx
 from app.config import Settings
 from app.domain.datetime_github import parse_github_datetime
 from app.domain.github_inputs import GitHubScoreInputs
+from app.domain.scoring import evaluate_commits_farm_flag
 
 
 class GitHubUserNotFoundError(Exception):
@@ -39,6 +40,19 @@ query ContributionSlice($login: String!, $from: DateTime!, $to: DateTime!) {
       totalPullRequestContributions
       totalPullRequestReviewContributions
       restrictedContributionsCount
+    }
+  }
+}
+"""
+
+GRAPHQL_COMMIT_BREAKDOWN_SLICE = """
+query CommitBreakdownSlice($login: String!, $from: DateTime!, $to: DateTime!) {
+  user(login: $login) {
+    login
+    contributionsCollection(from: $from, to: $to) {
+      commitContributionsByRepository(maxRepositories: 100) {
+        contributions { totalCount }
+      }
     }
   }
 }
@@ -124,6 +138,24 @@ class GitHubClient(GitHubStatsFetcher):
                 client, login, range_from, range_to
             )
 
+    async def commit_breakdown_sum_between(
+        self,
+        login: str,
+        range_from: datetime,
+        range_to: datetime,
+    ) -> int:
+        """Sum visible commit counts from commitContributionsByRepository across year-slices."""
+        login = login.strip()
+        if not login:
+            raise InvalidGitHubLoginError()
+        if range_from > range_to:
+            return 0
+
+        async with self._open_client() as client:
+            return await self._commit_breakdown_year_slices_between(
+                client, login, range_from, range_to
+            )
+
     async def fetch_owner_repo_star_fork_totals(self, login: str) -> tuple[tuple[int, ...], int]:
         login = login.strip()
         if not login:
@@ -138,7 +170,7 @@ class GitHubClient(GitHubStatsFetcher):
         login: str,
         chunk_from: datetime,
         chunk_to: datetime,
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         payload = await self._graphql_request(
             client,
             GRAPHQL_SCORE_SLICE,
@@ -181,10 +213,14 @@ class GitHubClient(GitHubStatsFetcher):
             (
                 (commits, prs, reviews, private),
                 (stars_per_repo, forks_received),
+                breakdown_sum,
             ) = await asyncio.gather(
                 self._contributions_year_slices(client, login, created_at),
                 self._repos_aggregates(client, login, total_repos_hint=public_repos),
+                self._commit_breakdown_year_slices(client, login, created_at),
             )
+
+            farm_flagged = evaluate_commits_farm_flag(commits, breakdown_sum)
 
             return GitHubScoreInputs(
                 commits_alltime=commits,
@@ -195,6 +231,8 @@ class GitHubClient(GitHubStatsFetcher):
                 forks_received=forks_received,
                 followers=int(profile.get("followers", 0)),
                 account_created_at=created_at,
+                commits_breakdown_sum=breakdown_sum,
+                commits_farm_flagged=farm_flagged,
             )
 
     async def _fetch_user_profile(self, client: httpx.AsyncClient, login: str) -> dict[str, Any]:
@@ -241,6 +279,71 @@ class GitHubClient(GitHubStatsFetcher):
         total_reviews = sum(r[2] for r in results)
         total_private = sum(r[3] for r in results)
         return (total_commits, total_prs, total_reviews, total_private)
+
+    async def _commit_breakdown_year_slices(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+        created_at: datetime,
+    ) -> int:
+        now = datetime.now(tz=UTC)
+        return await self._commit_breakdown_year_slices_between(client, login, created_at, now)
+
+    async def _commit_breakdown_year_slices_between(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+        range_from: datetime,
+        range_to: datetime,
+    ) -> int:
+        chunks: list[tuple[datetime, datetime]] = []
+        for year in range(range_from.year, range_to.year + 1):
+            chunk_from = max(range_from, datetime(year, 1, 1, tzinfo=UTC))
+            chunk_to = min(range_to, datetime(year, 12, 31, 23, 59, 59, tzinfo=UTC))
+            if chunk_from > chunk_to:
+                continue
+            chunks.append((chunk_from, chunk_to))
+
+        if not chunks:
+            return 0
+
+        results = await asyncio.gather(
+            *[self._commit_breakdown_sum_for_range(client, login, cf, ct) for cf, ct in chunks]
+        )
+        return sum(results)
+
+    async def _commit_breakdown_sum_for_range(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+        chunk_from: datetime,
+        chunk_to: datetime,
+    ) -> int:
+        payload = await self._graphql_request(
+            client,
+            GRAPHQL_COMMIT_BREAKDOWN_SLICE,
+            {
+                "login": login,
+                "from": _github_datetime(chunk_from),
+                "to": _github_datetime(chunk_to),
+            },
+        )
+        node = payload.get("user") if isinstance(payload, dict) else None
+        if node is None:
+            raise GitHubUserNotFoundError(login)
+        resolved_login = node.get("login")
+        if isinstance(resolved_login, str) and resolved_login.lower() != login.lower():
+            raise GitHubAPIError(
+                f"GitHub user login {resolved_login!r} does not match requested login {login!r}"
+            )
+        cc = node.get("contributionsCollection") or {}
+        total = 0
+        for entry in cc.get("commitContributionsByRepository") or []:
+            if not isinstance(entry, dict):
+                continue
+            contrib = entry.get("contributions") or {}
+            total += int(contrib.get("totalCount", 0) or 0)
+        return total
 
     async def _repos_aggregates(
         self,

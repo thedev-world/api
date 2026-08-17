@@ -23,6 +23,13 @@ class Developer(Base):
     github_token: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
 
     commits_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    commits_breakdown_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    commits_farm_flagged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    commits_farm_cleared: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
     prs_contributions_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reviews_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     private_contributions_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

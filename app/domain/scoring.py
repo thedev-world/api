@@ -8,6 +8,8 @@ from app.domain.github_inputs import GitHubScoreInputs
 
 FOLLOWERS_COUNT_CAP_FOR_XP = 500
 STARS_SUM_SKIP_PER_REPO_CAP = 50
+COMMITS_FARM_MIN_COMMITS = 15_000
+COMMITS_FARM_RATIO_THRESHOLD = 4.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,25 @@ def stars_after_single_repo_cap(stars_per_repo: tuple[int, ...]) -> tuple[int, i
     return (total_raw, capped_total)
 
 
+def evaluate_commits_farm_flag(commits_alltime: int, breakdown_sum: int) -> bool:
+    if commits_alltime <= COMMITS_FARM_MIN_COMMITS:
+        return False
+    if breakdown_sum <= 0:
+        return False
+    return commits_alltime / breakdown_sum > COMMITS_FARM_RATIO_THRESHOLD
+
+
+def commits_for_xp(
+    commits_alltime: int,
+    breakdown_sum: int,
+    farm_flagged: bool,
+    farm_cleared: bool,
+) -> int:
+    if farm_flagged and not farm_cleared:
+        return breakdown_sum
+    return commits_alltime
+
+
 def xp_breakdown_from_persisted_components(
     *,
     commits_alltime: int,
@@ -88,8 +109,14 @@ def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContributio
     _, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
 
     years = github_account_age_full_years(inputs.account_created_at)
+    effective_commits = commits_for_xp(
+        inputs.commits_alltime,
+        inputs.commits_breakdown_sum,
+        inputs.commits_farm_flagged,
+        inputs.commits_farm_cleared,
+    )
     breakdown = xp_breakdown_from_persisted_components(
-        commits_alltime=inputs.commits_alltime,
+        commits_alltime=effective_commits,
         prs_contributions_alltime=inputs.prs_contributions_alltime,
         reviews_alltime=inputs.reviews_alltime,
         private_contributions_alltime=inputs.private_contributions_alltime,

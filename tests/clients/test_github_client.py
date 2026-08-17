@@ -212,3 +212,67 @@ async def test_contribution_totals_for_range_includes_restricted_private_commits
         )
 
     assert result == (4, 1, 0, 2)
+
+
+def _patch_breakdown_for_range(return_values: list[int]) -> MagicMock:
+    return AsyncMock(side_effect=return_values)
+
+
+@pytest.mark.asyncio
+async def test_commit_breakdown_sum_between_within_one_year() -> None:
+    client = _make_client()
+    range_from = datetime(2026, 1, 15, tzinfo=UTC)
+    range_to = datetime(2026, 5, 5, tzinfo=UTC)
+
+    mock_inner = _patch_breakdown_for_range([120])
+    with patch.object(client, "_commit_breakdown_sum_for_range", new=mock_inner):
+        result = await client.commit_breakdown_sum_between("alice", range_from, range_to)
+
+    assert result == 120
+    mock_inner.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_commit_breakdown_sum_between_crossing_year_boundary() -> None:
+    client = _make_client()
+    range_from = datetime(2025, 12, 20, tzinfo=UTC)
+    range_to = datetime(2026, 5, 5, tzinfo=UTC)
+
+    mock_inner = _patch_breakdown_for_range([300, 500])
+    with patch.object(client, "_commit_breakdown_sum_for_range", new=mock_inner):
+        result = await client.commit_breakdown_sum_between("alice", range_from, range_to)
+
+    assert result == 800
+    assert mock_inner.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_commit_breakdown_sum_for_range_sums_repository_contributions() -> None:
+    client = _make_client()
+    mock_http = AsyncMock()
+
+    with patch.object(
+        client,
+        "_graphql_request",
+        new=AsyncMock(
+            return_value={
+                "user": {
+                    "login": "alice",
+                    "contributionsCollection": {
+                        "commitContributionsByRepository": [
+                            {"contributions": {"totalCount": 42}},
+                            {"contributions": {"totalCount": 8}},
+                        ]
+                    },
+                }
+            }
+        ),
+    ):
+        result = await client._commit_breakdown_sum_for_range(
+            mock_http,
+            "alice",
+            datetime(2026, 1, 1, tzinfo=UTC),
+            datetime(2026, 12, 31, 23, 59, 59, tzinfo=UTC),
+        )
+
+    assert result == 50

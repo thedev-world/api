@@ -15,6 +15,7 @@ from app.domain.scoring import (
     XpBreakdownContribution,
     XpProgress,
     calculate_xp,
+    commits_for_xp,
     get_cell_count,
     get_player_class,
     get_xp_progress,
@@ -83,8 +84,14 @@ def github_snapshot_from_inputs(
 def github_snapshot_from_developer_row(login: str, dev: Developer) -> GitHubPublicScoreSnapshot:
     trimmed = login.strip()
     years = github_account_age_full_years(dev.account_created_at)
+    effective_commits = commits_for_xp(
+        dev.commits_alltime,
+        dev.commits_breakdown_sum,
+        dev.commits_farm_flagged,
+        dev.commits_farm_cleared,
+    )
     breakdown = xp_breakdown_from_persisted_components(
-        commits_alltime=dev.commits_alltime,
+        commits_alltime=effective_commits,
         prs_contributions_alltime=dev.prs_contributions_alltime,
         reviews_alltime=dev.reviews_alltime,
         private_contributions_alltime=dev.private_contributions_alltime,
@@ -104,6 +111,9 @@ def github_snapshot_from_developer_row(login: str, dev: Developer) -> GitHubPubl
         forks_received=dev.forks_received,
         followers=dev.followers,
         account_created_at=dev.account_created_at,
+        commits_breakdown_sum=dev.commits_breakdown_sum,
+        commits_farm_flagged=dev.commits_farm_flagged,
+        commits_farm_cleared=dev.commits_farm_cleared,
     )
     return GitHubPublicScoreSnapshot(
         login=trimmed,

@@ -21,6 +21,7 @@ from app.domain.score_snapshot import (
 )
 from app.domain.scoring import (
     calculate_xp,
+    evaluate_commits_farm_flag,
     stars_after_single_repo_cap,
 )
 from app.models.developer import Developer
@@ -29,6 +30,39 @@ from app.repositories.developer import DeveloperRepository
 SYNC_COOLDOWN = timedelta(hours=6)
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_commit_farm_fields(
+    row: Developer,
+    *,
+    commits_alltime: int,
+    breakdown_sum: int,
+) -> None:
+    row.commits_breakdown_sum = breakdown_sum
+    row.commits_farm_flagged = evaluate_commits_farm_flag(commits_alltime, breakdown_sum)
+
+
+def _score_inputs_from_row(
+    row: Developer,
+    *,
+    stars_per_repo: tuple[int, ...],
+    forks_received: int,
+    followers: int,
+    account_created_at: datetime,
+) -> GitHubScoreInputs:
+    return GitHubScoreInputs(
+        commits_alltime=row.commits_alltime,
+        prs_contributions_alltime=row.prs_contributions_alltime,
+        reviews_alltime=row.reviews_alltime,
+        private_contributions_alltime=row.private_contributions_alltime,
+        stars_per_repo=stars_per_repo,
+        forks_received=forks_received,
+        followers=followers,
+        account_created_at=account_created_at,
+        commits_breakdown_sum=row.commits_breakdown_sum,
+        commits_farm_flagged=row.commits_farm_flagged,
+        commits_farm_cleared=row.commits_farm_cleared,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +134,8 @@ class ScoreSyncService:
                     github_id=github_id,
                     github_login=trimmed,
                     commits_alltime=inputs.commits_alltime,
+                    commits_breakdown_sum=inputs.commits_breakdown_sum,
+                    commits_farm_flagged=inputs.commits_farm_flagged,
                     prs_contributions_alltime=inputs.prs_contributions_alltime,
                     reviews_alltime=inputs.reviews_alltime,
                     private_contributions_alltime=inputs.private_contributions_alltime,
@@ -117,6 +153,8 @@ class ScoreSyncService:
                 await repo.create(created)
             else:
                 row.commits_alltime = inputs.commits_alltime
+                row.commits_breakdown_sum = inputs.commits_breakdown_sum
+                row.commits_farm_flagged = inputs.commits_farm_flagged
                 row.prs_contributions_alltime = inputs.prs_contributions_alltime
                 row.reviews_alltime = inputs.reviews_alltime
                 row.private_contributions_alltime = inputs.private_contributions_alltime
@@ -149,10 +187,12 @@ class ScoreSyncService:
             (fresh_commits, fresh_prs, fresh_reviews, fresh_private),
             profile,
             (stars_per_repo, forks_received),
+            breakdown_sum,
         ) = await asyncio.gather(
             github.contributions_totals_between(trimmed, account_created_at, now),
             github.fetch_public_user_profile(trimmed),
             github.fetch_owner_repo_star_fork_totals(trimmed),
+            github.commit_breakdown_sum_between(trimmed, account_created_at, now),
         )
         logger.debug(
             "incremental refresh for %r alltime from %s: commits %d→%d prs %d→%d \
@@ -176,6 +216,11 @@ class ScoreSyncService:
         row.prs_contributions_alltime = fresh_prs
         row.reviews_alltime = fresh_reviews
         row.private_contributions_alltime = fresh_private
+        _apply_commit_farm_fields(
+            row,
+            commits_alltime=fresh_commits,
+            breakdown_sum=breakdown_sum,
+        )
         row.followers = int(profile.get("followers", 0))
         row.forks_received = forks_received
         row.stars_received_raw = stars_raw
@@ -186,11 +231,8 @@ class ScoreSyncService:
         row.last_sync_at = now
         row.updated_at = now
 
-        inputs = GitHubScoreInputs(
-            commits_alltime=row.commits_alltime,
-            prs_contributions_alltime=row.prs_contributions_alltime,
-            reviews_alltime=row.reviews_alltime,
-            private_contributions_alltime=row.private_contributions_alltime,
+        inputs = _score_inputs_from_row(
+            row,
             stars_per_repo=stars_per_repo,
             forks_received=forks_received,
             followers=int(profile.get("followers", 0)),

@@ -12,3 +12,6 @@ class GitHubScoreInputs:
     forks_received: int
     followers: int
     account_created_at: datetime
+    commits_breakdown_sum: int = 0
+    commits_farm_flagged: bool = False
+    commits_farm_cleared: bool = False
