@@ -19,6 +19,9 @@ class DeveloperPublicResponse(BaseModel):
     github_id: int
     github_login: str
     commits_alltime: int
+    commits_breakdown_sum: int
+    commits_farm_flagged: bool
+    commits_farm_cleared: bool
     prs_contributions_alltime: int
     reviews_alltime: int
     private_contributions_alltime: int
@@ -49,6 +52,9 @@ def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
         github_id=row.github_id,
         github_login=row.github_login,
         commits_alltime=row.commits_alltime,
+        commits_breakdown_sum=row.commits_breakdown_sum,
+        commits_farm_flagged=row.commits_farm_flagged,
+        commits_farm_cleared=row.commits_farm_cleared,
         prs_contributions_alltime=row.prs_contributions_alltime,
         reviews_alltime=row.reviews_alltime,
         private_contributions_alltime=row.private_contributions_alltime,

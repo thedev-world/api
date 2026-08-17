@@ -20,7 +20,12 @@ def _cleanup():
 
 @pytest.mark.asyncio
 async def test_get_user_returns_developer_snapshot(api_client) -> None:
-    dev = make_developer(github_login="alice")
+    dev = make_developer(
+        github_login="alice",
+        commits_breakdown_sum=800,
+        commits_farm_flagged=True,
+        commits_farm_cleared=False,
+    )
     repo = _repo_override(dev)
 
     try:
@@ -39,6 +44,9 @@ async def test_get_user_returns_developer_snapshot(api_client) -> None:
     assert data["cell_count"] == get_cell_count(dev.xp_brut)
     assert data["player_class"]["name"] == "Seedling"
     assert "phrase" in data["player_class"]
+    assert data["commits_breakdown_sum"] == 800
+    assert data["commits_farm_flagged"] is True
+    assert data["commits_farm_cleared"] is False
     repo.get_by_github_login.assert_awaited_once_with("alice")
 
 

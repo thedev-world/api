@@ -201,6 +201,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
     gh.contributions_totals_between = AsyncMock(return_value=(2, 0, 0, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((3,), 0))
+    gh.commit_breakdown_sum_between = AsyncMock(return_value=2)
 
     svc = ScoreSyncService(gh)
 
@@ -286,6 +287,7 @@ async def test_incremental_sync_range_crosses_year_boundary() -> None:
     gh.contributions_totals_between = AsyncMock(return_value=(80, 18, 7, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
     gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
+    gh.commit_breakdown_sum_between = AsyncMock(return_value=80)
 
     svc = ScoreSyncService(gh)
 
@@ -446,3 +448,95 @@ async def test_sync_for_actor_uses_no_token_when_row_has_none() -> None:
 
         # None -> falls back to global token inside GitHubClient
         gh.with_token.assert_called_once_with(None)
+
+
+@pytest.mark.asyncio
+async def test_incremental_sync_flags_commit_farm_and_caps_xp() -> None:
+    last_sync = datetime(2030, 5, 1, 12, 0, 0, tzinfo=UTC)
+    frozen_now = last_sync + timedelta(hours=8)
+    row = make_developer(
+        last_sync_at=last_sync,
+        github_login="flolep2607",
+        github_id=999,
+        commits_alltime=26000,
+        xp_brut=260000,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+    profile = {
+        "id": 999,
+        "login": "flolep2607",
+        "created_at": "2030-01-01T00:00:00Z",
+        "followers": 0,
+    }
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
+    gh.contributions_totals_between = AsyncMock(return_value=(26792, 0, 0, 0))
+    gh.fetch_public_user_profile = AsyncMock(return_value=profile)
+    gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
+    gh.commit_breakdown_sum_between = AsyncMock(return_value=800)
+
+    svc = ScoreSyncService(gh)
+
+    with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.get_by_github_id = AsyncMock(return_value=row)
+        RepoCls.return_value = repo
+
+        with patch("app.services.score_sync_service.datetime", _patch_now(frozen_now)):
+            out = await svc.sync_for_actor(db, github_id=999, login="flolep2607")
+
+        assert isinstance(out, MeSyncPerformed)
+        assert row.commits_alltime == 26792
+        assert row.commits_breakdown_sum == 800
+        assert row.commits_farm_flagged is True
+        assert row.xp_brut == 800 * 10
+        assert out.snapshot.github_inputs.commits_alltime == 26792
+        assert out.snapshot.xp_breakdown.from_commits == 800 * 10
+
+
+@pytest.mark.asyncio
+async def test_incremental_sync_farm_cleared_keeps_alltime_xp() -> None:
+    last_sync = datetime(2030, 5, 1, 12, 0, 0, tzinfo=UTC)
+    frozen_now = last_sync + timedelta(hours=8)
+    row = make_developer(
+        last_sync_at=last_sync,
+        github_login="flolep2607",
+        github_id=999,
+        commits_alltime=26000,
+        commits_farm_cleared=True,
+        xp_brut=260000,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+    profile = {
+        "id": 999,
+        "login": "flolep2607",
+        "created_at": "2030-01-01T00:00:00Z",
+        "followers": 0,
+    }
+
+    db = MagicMock()
+    db.commit = AsyncMock()
+    gh = MagicMock()
+    gh.with_token = MagicMock(return_value=gh)
+    gh.contributions_totals_between = AsyncMock(return_value=(26792, 0, 0, 0))
+    gh.fetch_public_user_profile = AsyncMock(return_value=profile)
+    gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((), 0))
+    gh.commit_breakdown_sum_between = AsyncMock(return_value=800)
+
+    svc = ScoreSyncService(gh)
+
+    with patch("app.services.score_sync_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.get_by_github_id = AsyncMock(return_value=row)
+        RepoCls.return_value = repo
+
+        with patch("app.services.score_sync_service.datetime", _patch_now(frozen_now)):
+            out = await svc.sync_for_actor(db, github_id=999, login="flolep2607")
+
+        assert row.commits_farm_flagged is True
+        assert row.commits_farm_cleared is True
+        assert row.xp_brut == 26792 * 10
+        assert out.snapshot.xp_breakdown.from_commits == 26792 * 10
