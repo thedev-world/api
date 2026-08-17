@@ -41,3 +41,8 @@ class DeveloperService:
         await db.commit()
         await db.refresh(developer)
         return developer
+
+    async def delete_account(self, db: AsyncSession, developer: Developer) -> None:
+        repo = DeveloperRepository(db)
+        await repo.delete(developer)
+        await db.commit()

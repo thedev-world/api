@@ -36,3 +36,6 @@ class DeveloperRepository:
         for key, value in fields.items():
             setattr(developer, key, value)
         return developer
+
+    async def delete(self, developer: Developer) -> None:
+        await self.db.delete(developer)
