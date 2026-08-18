@@ -171,3 +171,73 @@ async def test_post_onboarding_triggers_capture_task(api_client, _logged_in_alic
             )
     finally:
         app.dependency_overrides.pop(get_developer_service, None)
+
+
+@pytest.mark.asyncio
+async def test_delete_me_requires_auth(api_client) -> None:
+    resp = await api_client.delete("/api/v1/me")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_delete_me_returns_204_and_clears_cookie(api_client, _logged_in_alice) -> None:
+    class _Svc:
+        async def delete_account(self, db, developer):
+            _ = (db, developer)
+
+    app.dependency_overrides[get_developer_service] = lambda: _Svc()
+
+    try:
+        resp = await api_client.delete("/api/v1/me")
+        assert resp.status_code == 204
+        set_cookie = resp.headers.get("set-cookie", "")
+        assert "devplanet_session=" in set_cookie
+        assert "Max-Age=0" in set_cookie or "max-age=0" in set_cookie.lower()
+    finally:
+        app.dependency_overrides.pop(get_developer_service, None)
+
+
+@pytest.mark.asyncio
+async def test_delete_me_triggers_planet_update_when_onboarded(api_client) -> None:
+    onboarded = _sample_developer()
+    onboarded.is_onboarded = True
+    onboarded.island = IslandChoice.BACKEND.value
+
+    async def _dev() -> Developer:
+        return onboarded
+
+    app.dependency_overrides[get_current_developer] = _dev
+
+    class _Svc:
+        async def delete_account(self, db, developer):
+            _ = (db, developer)
+
+    app.dependency_overrides[get_developer_service] = lambda: _Svc()
+
+    try:
+        with patch("app.routers.me.update_planet_json") as mock_task:
+            resp = await api_client.delete("/api/v1/me")
+            assert resp.status_code == 204
+            mock_task.delay.assert_called_once()
+    finally:
+        app.dependency_overrides.pop(get_current_developer, None)
+        app.dependency_overrides.pop(get_developer_service, None)
+
+
+@pytest.mark.asyncio
+async def test_delete_me_does_not_trigger_planet_update_when_not_onboarded(
+    api_client, _logged_in_alice
+) -> None:
+    class _Svc:
+        async def delete_account(self, db, developer):
+            _ = (db, developer)
+
+    app.dependency_overrides[get_developer_service] = lambda: _Svc()
+
+    try:
+        with patch("app.routers.me.update_planet_json") as mock_task:
+            resp = await api_client.delete("/api/v1/me")
+            assert resp.status_code == 204
+            mock_task.delay.assert_not_called()
+    finally:
+        app.dependency_overrides.pop(get_developer_service, None)

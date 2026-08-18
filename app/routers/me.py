@@ -3,8 +3,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette import status
+from starlette.responses import Response
 
 from app.clients.github import GitHubClient
+from app.config import Settings, get_settings
+from app.core.auth_cookies import logout_response
 from app.database import get_db
 from app.dependencies.auth import get_current_developer
 from app.dependencies.providers import (
@@ -67,6 +71,19 @@ async def update_me(
 ) -> DeveloperPublicResponse:
     updated = await service.update_profile(db, developer, payload)
     return developer_public_from_orm(updated)
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    developer: Annotated[Developer, Depends(get_current_developer)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    service: Annotated[DeveloperService, Depends(get_developer_service)],
+) -> Response:
+    await service.delete_account(db, developer)
+    if developer.is_onboarded:
+        update_planet_json.delay()
+    return logout_response(settings)
 
 
 @router.post("/onboarding", response_model=DeveloperPublicResponse, status_code=200)

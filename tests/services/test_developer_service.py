@@ -124,3 +124,20 @@ async def test_complete_onboarding_raises_422_when_island_not_set() -> None:
 
     assert exc_info.value.status_code == 422
     assert "island" in exc_info.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_delete_account_hard_deletes_developer() -> None:
+    dev = make_developer(island="frontend", is_onboarded=True)
+    db = _mock_db()
+    svc = DeveloperService()
+
+    with patch("app.services.developer_service.DeveloperRepository") as RepoCls:
+        repo = MagicMock()
+        repo.delete = AsyncMock()
+        RepoCls.return_value = repo
+
+        await svc.delete_account(db, dev)
+
+        repo.delete.assert_awaited_once_with(dev)
+        db.commit.assert_awaited_once()
