@@ -103,14 +103,6 @@ class Settings(BaseSettings):
         default="planet-data.json",
         description="Object key for the planet snapshot file in the bucket",
     )
-    s3_capture_key_prefix: str = Field(
-        default="captures/",
-        description="S3 key prefix for profile capture images (e.g. 'captures/').",
-    )
-    frontend_internal_url: str = Field(
-        default="http://front:3000",
-        description="Internal URL of the frontend, reachable from the Celery capture worker.",
-    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
