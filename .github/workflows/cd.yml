@@ -11,7 +11,6 @@ on:
 
 env:
   IMAGE_API: ${{ secrets.SCW_REGISTRY }}/devplanet-api
-  IMAGE_CAPTURE: ${{ secrets.SCW_REGISTRY }}/devplanet-capture
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -23,32 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
-      capture_changed: ${{ steps.meta.outputs.capture_changed }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Get tag and check capture changes since last release
+      - name: Get tag
         id: meta
-        run: |
-          CURRENT="${{ github.event.release.tag_name }}"
-          PREV=$(git tag --sort=-v:refname | grep -Fxv "$CURRENT" | head -1 || true)
-          echo "tag_name=$CURRENT" >> $GITHUB_OUTPUT
-
-          CAPTURE_PATHS="app/workers/capture_task.py Dockerfile pyproject.toml uv.lock"
-          if [ -z "$PREV" ]; then
-            echo "No previous tag — building capture image."
-            echo "capture_changed=true" >> $GITHUB_OUTPUT
-          elif git diff --name-only "$PREV" "$CURRENT" | grep -qE '^(app/workers/capture_task\.py|Dockerfile|pyproject\.toml|uv\.lock)$'; then
-            echo "Capture changes detected between $PREV and $CURRENT."
-            echo "capture_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "No capture changes between $PREV and $CURRENT — skipping."
-            echo "capture_changed=false" >> $GITHUB_OUTPUT
-          fi
+        run: echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
 
       - name: Log in to Scaleway registry
         run: echo "${{ secrets.SCW_SECRET_KEY }}" | docker login rg.fr-par.scw.cloud -u nologin --password-stdin
@@ -60,20 +41,8 @@ jobs:
             -t ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }} \
             .
 
-      - name: Build capture image
-        if: steps.meta.outputs.capture_changed == 'true'
-        run: |
-          docker build \
-            --target capture \
-            -t ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }} \
-            .
-
       - name: Push API image
         run: docker push ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag_name }}
-
-      - name: Push capture image
-        if: steps.meta.outputs.capture_changed == 'true'
-        run: docker push ${{ env.IMAGE_CAPTURE }}:${{ steps.meta.outputs.tag_name }}
 
   # ---------------------------------------------------------------------------
   # Deploy - Deploys to prod after build (release) or manually (dispatch)
@@ -105,13 +74,3 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             /opt/devplanet/devplanet-infra/scripts/deploy.sh api ${{ steps.meta.outputs.tag }}
-
-      - name: Deploy capture worker via SSH
-        if: github.event_name == 'release' && needs.build-and-push.outputs.capture_changed == 'true'
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            /opt/devplanet/devplanet-infra/scripts/deploy.sh capture ${{ steps.meta.outputs.tag }}
