@@ -32,6 +32,16 @@ SYNC_COOLDOWN = timedelta(hours=6)
 logger = logging.getLogger(__name__)
 
 
+def reset_sync_cooldown(row: Developer, *, now: datetime) -> None:
+    """Allow immediate POST /me/sync after OAuth token or scope changes."""
+    row.last_sync_at = now - SYNC_COOLDOWN - timedelta(seconds=1)
+
+
+def _include_org_admin_repos(row: Developer | None) -> bool:
+    """Org repo stars require the developer's OAuth token (read:org)."""
+    return bool(row is not None and row.github_token)
+
+
 def _apply_commit_farm_fields(
     row: Developer,
     *,
@@ -113,6 +123,7 @@ class ScoreSyncService:
         row = await repo.get_by_github_id(github_id)
 
         github = self._github.with_token(row.github_token if row is not None else None)
+        include_org_repos = _include_org_admin_repos(row)
 
         if row is not None and row.last_sync_at is not None:
             raw_last = row.last_sync_at
@@ -124,7 +135,7 @@ class ScoreSyncService:
         needs_full_backfill = row is None or row.last_sync_at is None
         if needs_full_backfill:
             inputs, profile = await asyncio.gather(
-                github.fetch_score_inputs(trimmed),
+                github.fetch_score_inputs(trimmed, include_org_admin_repos=include_org_repos),
                 github.fetch_public_user_profile(trimmed),
             )
             stars_raw, stars_capped = stars_after_single_repo_cap(inputs.stars_per_repo)
@@ -191,7 +202,10 @@ class ScoreSyncService:
         ) = await asyncio.gather(
             github.contributions_totals_between(trimmed, account_created_at, now),
             github.fetch_public_user_profile(trimmed),
-            github.fetch_owner_repo_star_fork_totals(trimmed),
+            github.fetch_owner_repo_star_fork_totals(
+                trimmed,
+                include_org_admin_repos=include_org_repos,
+            ),
             github.commit_breakdown_sum_between(trimmed, account_created_at, now),
         )
         logger.debug(

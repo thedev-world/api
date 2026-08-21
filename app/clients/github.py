@@ -10,6 +10,7 @@ import httpx
 from app.config import Settings
 from app.domain.datetime_github import parse_github_datetime
 from app.domain.github_inputs import GitHubScoreInputs
+from app.domain.github_repo_stats import merge_repo_stats, repo_stats_from_pages
 from app.domain.scoring import evaluate_commits_farm_flag
 
 
@@ -156,13 +157,22 @@ class GitHubClient(GitHubStatsFetcher):
                 client, login, range_from, range_to
             )
 
-    async def fetch_owner_repo_star_fork_totals(self, login: str) -> tuple[tuple[int, ...], int]:
+    async def fetch_owner_repo_star_fork_totals(
+        self,
+        login: str,
+        *,
+        include_org_admin_repos: bool = False,
+    ) -> tuple[tuple[int, ...], int]:
         login = login.strip()
         if not login:
             raise InvalidGitHubLoginError()
 
         async with self._open_client() as client:
-            return await self._repos_aggregates(client, login)
+            return await self._repos_aggregates(
+                client,
+                login,
+                include_org_admin=include_org_admin_repos,
+            )
 
     async def _contribution_totals_for_range(
         self,
@@ -200,7 +210,12 @@ class GitHubClient(GitHubStatsFetcher):
             restricted,
         )
 
-    async def fetch_score_inputs(self, login: str) -> GitHubScoreInputs:
+    async def fetch_score_inputs(
+        self,
+        login: str,
+        *,
+        include_org_admin_repos: bool = False,
+    ) -> GitHubScoreInputs:
         login = login.strip()
         if not login:
             raise InvalidGitHubLoginError()
@@ -216,7 +231,12 @@ class GitHubClient(GitHubStatsFetcher):
                 breakdown_sum,
             ) = await asyncio.gather(
                 self._contributions_year_slices(client, login, created_at),
-                self._repos_aggregates(client, login, total_repos_hint=public_repos),
+                self._repos_aggregates(
+                    client,
+                    login,
+                    total_repos_hint=public_repos,
+                    include_org_admin=include_org_admin_repos,
+                ),
                 self._commit_breakdown_year_slices(client, login, created_at),
             )
 
@@ -350,15 +370,150 @@ class GitHubClient(GitHubStatsFetcher):
         client: httpx.AsyncClient,
         login: str,
         total_repos_hint: int | None = None,
+        *,
+        include_org_admin: bool = False,
     ) -> tuple[tuple[int, ...], int]:
-        """Fetch all owner repos and return (stars_per_repo, total_forks).
-
-        When total_repos_hint is provided (from /users profile), all pages are fired
-        in parallel. Without a hint, falls back to sequential pagination.
-        """
+        """Fetch personal owner repos and optionally org repos where the token holder is admin."""
         if total_repos_hint is not None and total_repos_hint > 0:
-            return await self._repos_aggregates_parallel(client, login, total_repos_hint)
-        return await self._repos_aggregates_sequential(client, login)
+            pages = await self._personal_repo_pages_parallel(client, login, total_repos_hint)
+        else:
+            pages = await self._personal_repo_pages_sequential(client, login)
+
+        personal_stats = repo_stats_from_pages(pages)
+        if not include_org_admin:
+            return merge_repo_stats(personal_stats)
+
+        org_stats = await self._org_admin_repo_stats(client)
+        return merge_repo_stats(personal_stats, org_stats)
+
+    async def _org_admin_repo_stats(self, client: httpx.AsyncClient) -> dict[str, tuple[int, int]]:
+        admin_orgs = await self._org_admin_org_logins(client)
+        if not admin_orgs:
+            return {}
+
+        org_repo_pages = await asyncio.gather(
+            *[self._org_repo_pages(client, org_login) for org_login in admin_orgs]
+        )
+        flat_pages = [page for pages in org_repo_pages for page in pages]
+        return repo_stats_from_pages(flat_pages)
+
+    async def _org_admin_org_logins(self, client: httpx.AsyncClient) -> list[str]:
+        admin_orgs: list[str] = []
+        page = 1
+        while True:
+            batch = await self._fetch_org_memberships_page(client, page)
+            if not batch:
+                break
+            for membership in batch:
+                if not isinstance(membership, dict):
+                    continue
+                if membership.get("role") != "admin":
+                    continue
+                organization = membership.get("organization")
+                if not isinstance(organization, dict):
+                    continue
+                org_login = organization.get("login")
+                if isinstance(org_login, str) and org_login.strip():
+                    admin_orgs.append(org_login.strip())
+            if len(batch) < 100:
+                break
+            page += 1
+        return admin_orgs
+
+    async def _fetch_org_memberships_page(
+        self,
+        client: httpx.AsyncClient,
+        page: int,
+    ) -> list[dict[str, Any]]:
+        r = await client.get(
+            "/user/memberships/orgs",
+            params={"state": "active", "per_page": 100, "page": page},
+        )
+        if r.status_code >= 400:
+            raise GitHubAPIError(f"REST HTTP {r.status_code}: {r.text}")
+        memberships = r.json()
+        if not isinstance(memberships, list):
+            raise GitHubAPIError("Invalid /user/memberships/orgs response body")
+        return memberships
+
+    async def _org_repo_pages(
+        self,
+        client: httpx.AsyncClient,
+        org_login: str,
+    ) -> list[list[dict[str, Any]]]:
+        pages: list[list[dict[str, Any]]] = []
+        page = 1
+        while True:
+            batch = await self._fetch_org_repos_page(client, org_login, page)
+            if not batch:
+                break
+            pages.append(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return pages
+
+    async def _fetch_org_repos_page(
+        self,
+        client: httpx.AsyncClient,
+        org_login: str,
+        page: int,
+    ) -> list[dict[str, Any]]:
+        r = await client.get(
+            f"/orgs/{org_login}/repos",
+            params={
+                "type": "all",
+                "per_page": 100,
+                "page": page,
+                "sort": "updated",
+                "direction": "desc",
+            },
+        )
+        self._handle_rest_status(r, org_login)
+        batch = r.json()
+        if not isinstance(batch, list):
+            raise GitHubAPIError("Invalid /orgs/repos response body")
+        return batch
+
+    async def _personal_repo_pages_parallel(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+        total_repos_hint: int,
+    ) -> list[list[dict[str, Any]]]:
+        total_pages = math.ceil(total_repos_hint / 100)
+        pages = list(
+            await asyncio.gather(
+                *[self._fetch_repos_page(client, login, p) for p in range(1, total_pages + 1)]
+            )
+        )
+        last_page = pages[-1] if pages else []
+        if len(last_page) == 100:
+            extra_page = total_pages + 1
+            while True:
+                batch = await self._fetch_repos_page(client, login, extra_page)
+                pages.append(batch)
+                if len(batch) < 100:
+                    break
+                extra_page += 1
+        return pages
+
+    async def _personal_repo_pages_sequential(
+        self,
+        client: httpx.AsyncClient,
+        login: str,
+    ) -> list[list[dict[str, Any]]]:
+        pages: list[list[dict[str, Any]]] = []
+        page = 1
+        while True:
+            batch = await self._fetch_repos_page(client, login, page)
+            if not batch:
+                break
+            pages.append(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return pages
 
     async def _fetch_repos_page(
         self,
@@ -381,58 +536,6 @@ class GitHubClient(GitHubStatsFetcher):
         if not isinstance(batch, list):
             raise GitHubAPIError("Invalid /repos response body")
         return batch
-
-    def _aggregate_repos(self, pages: list[list[dict[str, Any]]]) -> tuple[tuple[int, ...], int]:
-        stars_list: list[int] = []
-        forks_received = 0
-        for batch in pages:
-            for repo in batch:
-                if not isinstance(repo, dict):
-                    continue
-                if repo.get("fork"):
-                    continue
-                stars_list.append(int(repo.get("stargazers_count", 0) or 0))
-                forks_received += int(repo.get("forks_count", 0) or 0)
-        return (tuple(stars_list), forks_received)
-
-    async def _repos_aggregates_parallel(
-        self,
-        client: httpx.AsyncClient,
-        login: str,
-        total_repos_hint: int,
-    ) -> tuple[tuple[int, ...], int]:
-        total_pages = math.ceil(total_repos_hint / 100)
-        pages = await asyncio.gather(
-            *[self._fetch_repos_page(client, login, p) for p in range(1, total_pages + 1)]
-        )
-        # If the hint was stale and there are more repos, fetch additional pages sequentially
-        last_page = pages[-1] if pages else []
-        if len(last_page) == 100:
-            extra_page = total_pages + 1
-            while True:
-                batch = await self._fetch_repos_page(client, login, extra_page)
-                pages = (*pages, batch)
-                if len(batch) < 100:
-                    break
-                extra_page += 1
-        return self._aggregate_repos(list(pages))
-
-    async def _repos_aggregates_sequential(
-        self,
-        client: httpx.AsyncClient,
-        login: str,
-    ) -> tuple[tuple[int, ...], int]:
-        pages: list[list[dict[str, Any]]] = []
-        page = 1
-        while True:
-            batch = await self._fetch_repos_page(client, login, page)
-            if not batch:
-                break
-            pages.append(batch)
-            if len(batch) < 100:
-                break
-            page += 1
-        return self._aggregate_repos(pages)
 
     async def _graphql_request(
         self,

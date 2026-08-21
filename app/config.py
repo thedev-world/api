@@ -79,6 +79,7 @@ class Settings(BaseSettings):
         description="Set Secure flag on session cookie (use True behind HTTPS in production)",
     )
     oauth_state_cookie_name: str = Field(default="github_oauth_state")
+    oauth_return_to_cookie_name: str = Field(default="github_oauth_return_to")
     oauth_state_max_age_seconds: int = Field(default=600, ge=60, le=3600)
 
     s3_endpoint_url: str = Field(

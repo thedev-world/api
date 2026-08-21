@@ -127,6 +127,7 @@ def _map_sync_progress(progress: SyncProgress) -> ScoreSyncProgressSchema:
             stars=b_after.from_stars - b_before.from_stars,
             forks=b_after.from_forks - b_before.from_forks,
             followers=b_after.from_followers - b_before.from_followers,
+            repos=b_after.from_repos - b_before.from_repos,
             tenure_years_bonus=b_after.from_tenure - b_before.from_tenure,
         ),
     )

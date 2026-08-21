@@ -18,6 +18,7 @@ def make_developer(**overrides: object) -> Developer:
         "github_id": 424242,
         "github_login": "testdev",
         "github_token": None,
+        "github_oauth_scopes": "read:user,user:email,read:org",
         "commits_alltime": 0,
         "commits_breakdown_sum": 0,
         "commits_farm_flagged": False,

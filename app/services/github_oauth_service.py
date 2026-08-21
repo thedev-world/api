@@ -18,16 +18,20 @@ class GitHubOAuthService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def build_authorize_redirect_url(self, state: str) -> str:
+    def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
         client = AsyncOAuth2Client(
             client_id=self._settings.github_oauth_client_id,
             client_secret=self._settings.github_oauth_client_secret,
-            scope="read:user user:email",
+            scope="read:user user:email read:org",
         )
+        extra: dict[str, str] = {}
+        if prompt_consent:
+            extra["prompt"] = "consent"
         uri, _ = client.create_authorization_url(
             self._AUTHORIZE_URL,
             redirect_uri=self._settings.oauth_callback_url,
             state=state,
+            **extra,
         )
         return uri
 

@@ -41,6 +41,26 @@ def clear_oauth_state_cookie(response: RedirectResponse, settings: Settings) -> 
     response.delete_cookie(settings.oauth_state_cookie_name, path="/")
 
 
+def set_oauth_return_to_cookie(
+    response: RedirectResponse,
+    return_to: str,
+    settings: Settings,
+) -> None:
+    response.set_cookie(
+        key=settings.oauth_return_to_cookie_name,
+        value=return_to,
+        max_age=settings.oauth_state_max_age_seconds,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_oauth_return_to_cookie(response: RedirectResponse, settings: Settings) -> None:
+    response.delete_cookie(settings.oauth_return_to_cookie_name, path="/")
+
+
 def apply_oauth_callback_cookies(
     response: RedirectResponse,
     *,
@@ -49,6 +69,7 @@ def apply_oauth_callback_cookies(
 ) -> None:
     set_session_cookie(response, session_jwt, settings)
     clear_oauth_state_cookie(response, settings)
+    clear_oauth_return_to_cookie(response, settings)
 
 
 def logout_response(settings: Settings) -> Response:

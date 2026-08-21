@@ -7,8 +7,6 @@ Usage (local stack)::
 
     docker compose exec api /venv/bin/python snippet/sync_github_user.py GITHUB_LOGIN
 
-    docker compose exec api /venv/bin/python snippet/sync_github_user.py GITHUB_LOGIN --capture
-
 Prod (API container, env from deploy)::
 
     docker compose exec api /venv/bin/python \
@@ -18,7 +16,6 @@ Options:
   --full       Clear last_sync_at before sync (first-sync code path; same all-time
                GitHub refresh for commits/PRs/reviews on current code)
   --skip-s3    Update DB only, do not upload planet-data.json
-  --capture    Also enqueue profile JPEG capture (Celery capture queue)
   --dry-run    Fetch GitHub stats and print before/after diff without DB or S3 writes
 """
 
@@ -36,7 +33,6 @@ from app.database import AsyncSessionLocal
 from app.domain.scoring import calculate_xp, get_cell_count
 from app.models.developer import Developer
 from app.services.score_sync_service import MeSyncCooldown, MeSyncPerformed, ScoreSyncService
-from app.workers.celery_app import celery
 from app.workers.planet_task import update_planet_json
 
 SYNC_COOLDOWN = timedelta(hours=6)
@@ -171,11 +167,6 @@ def main() -> None:
         help="Skip planet-data.json upload",
     )
     parser.add_argument(
-        "--capture",
-        action="store_true",
-        help="Enqueue profile capture task after sync",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Fetch GitHub and print before/after diff without DB or S3 writes",
@@ -209,15 +200,6 @@ def main() -> None:
         raise SystemExit(
             f"S3 upload failed: {exc}\nNote: DB was updated; planet-data.json may be stale."
         ) from exc
-
-    if args.capture:
-        print(f"Enqueueing profile capture for {dev.github_login!r}...")
-        celery.send_task(
-            "devplanet.workers.generate_profile_capture",
-            args=[dev.github_login],
-            queue="capture",
-        )
-        print("Capture task enqueued.")
 
 
 if __name__ == "__main__":
