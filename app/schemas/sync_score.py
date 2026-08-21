@@ -20,6 +20,7 @@ class ScoreXpBreakdownDeltaSchema(BaseModel):
     stars: int
     forks: int
     followers: int
+    repos: int
     tenure_years_bonus: int
 
 
