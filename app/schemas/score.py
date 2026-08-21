@@ -16,6 +16,7 @@ class ScoreXpBreakdownSchema(BaseModel):
     from_stars: int = Field(serialization_alias="stars")
     from_forks: int = Field(serialization_alias="forks")
     from_followers: int = Field(serialization_alias="followers")
+    from_repos: int = Field(serialization_alias="repos")
     from_tenure: int = Field(serialization_alias="tenure_years_bonus")
 
 
@@ -99,6 +100,7 @@ def public_score_response_from(snapshot: GitHubPublicScoreSnapshot) -> GitHubPub
             from_stars=b.from_stars,
             from_forks=b.from_forks,
             from_followers=b.from_followers,
+            from_repos=b.from_repos,
             from_tenure=b.from_tenure,
         ),
         xp_progress=XpProgressSchema(

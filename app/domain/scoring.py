@@ -7,9 +7,12 @@ from app.domain.datetime_github import github_account_age_full_years
 from app.domain.github_inputs import GitHubScoreInputs
 
 FOLLOWERS_COUNT_CAP_FOR_XP = 500
+OWNED_REPOS_COUNT_CAP_FOR_XP = 50
+XP_PER_OWNED_REPO = 20
 STARS_SUM_SKIP_PER_REPO_CAP = 50
 COMMITS_FARM_MIN_COMMITS = 15_000
 COMMITS_FARM_RATIO_THRESHOLD = 4.0
+XP_PER_PRIVATE_CONTRIBUTION = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +24,7 @@ class XpBreakdownContribution:
     from_stars: int
     from_forks: int
     from_followers: int
+    from_repos: int
     from_tenure: int
 
 
@@ -71,6 +75,10 @@ def commits_for_xp(
     return commits_alltime
 
 
+def owned_repos_for_xp(count: int) -> int:
+    return min(max(0, count), OWNED_REPOS_COUNT_CAP_FOR_XP)
+
+
 def xp_breakdown_from_persisted_components(
     *,
     commits_alltime: int,
@@ -80,17 +88,20 @@ def xp_breakdown_from_persisted_components(
     stars_received_capped: int,
     forks_received: int,
     followers: int,
+    owned_non_fork_repos_count: int,
     years_on_github: int,
 ) -> XpBreakdownContribution:
     """XP slice from stored scalars (stars cap already applied upstream)."""
     b_commits = commits_alltime * 10
     b_prs = prs_contributions_alltime * 30
     b_reviews = reviews_alltime * 15
-    b_private = private_contributions_alltime * 20
+    b_private = private_contributions_alltime * 10
     b_stars = stars_received_capped * 50
     b_forks = forks_received * 40
     followers_for_xp = min(followers, FOLLOWERS_COUNT_CAP_FOR_XP)
     b_follow = followers_for_xp * 20
+    repos_for_xp = owned_repos_for_xp(owned_non_fork_repos_count)
+    b_repos = repos_for_xp * XP_PER_OWNED_REPO
     b_years = years_on_github * 200
 
     return XpBreakdownContribution(
@@ -101,6 +112,7 @@ def xp_breakdown_from_persisted_components(
         from_stars=b_stars,
         from_forks=b_forks,
         from_followers=b_follow,
+        from_repos=b_repos,
         from_tenure=b_years,
     )
 
@@ -123,6 +135,7 @@ def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContributio
         stars_received_capped=stars_capped,
         forks_received=inputs.forks_received,
         followers=inputs.followers,
+        owned_non_fork_repos_count=len(inputs.stars_per_repo),
         years_on_github=years,
     )
 
@@ -134,6 +147,7 @@ def calculate_xp(inputs: GitHubScoreInputs) -> tuple[int, XpBreakdownContributio
         + breakdown.from_stars
         + breakdown.from_forks
         + breakdown.from_followers
+        + breakdown.from_repos
         + breakdown.from_tenure
     )
     return xp, breakdown

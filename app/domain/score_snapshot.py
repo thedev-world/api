@@ -98,6 +98,7 @@ def github_snapshot_from_developer_row(login: str, dev: Developer) -> GitHubPubl
         stars_received_capped=dev.stars_received_capped,
         forks_received=dev.forks_received,
         followers=dev.followers,
+        owned_non_fork_repos_count=dev.owned_non_fork_repos_count,
         years_on_github=years,
     )
     xp = dev.xp_brut

@@ -99,6 +99,38 @@ def test_cell_count_increases_with_xp_under_regime_below_fifty_level() -> None:
     assert get_cell_count(xp_high) >= get_cell_count(xp_low)
 
 
+def test_private_contributions_xp_rate() -> None:
+    inp = GitHubScoreInputs(
+        commits_alltime=0,
+        prs_contributions_alltime=0,
+        reviews_alltime=0,
+        private_contributions_alltime=100,
+        stars_per_repo=(),
+        forks_received=0,
+        followers=0,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+    xp, breakdown = calculate_xp(inp)
+    assert breakdown.from_private_contributions == 1000
+    assert xp == 1000
+
+
+def test_repos_cap_for_xp_breakdown() -> None:
+    inp = GitHubScoreInputs(
+        commits_alltime=0,
+        prs_contributions_alltime=0,
+        reviews_alltime=0,
+        private_contributions_alltime=0,
+        stars_per_repo=(0,) * 60,
+        forks_received=0,
+        followers=0,
+        account_created_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+    xp, breakdown = calculate_xp(inp)
+    assert breakdown.from_repos == 50 * 20
+    assert xp == breakdown.from_repos
+
+
 def test_followers_cap_for_xp_breakdown() -> None:
     inp = GitHubScoreInputs(
         commits_alltime=0,
