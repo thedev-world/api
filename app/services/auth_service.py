@@ -10,11 +10,21 @@ from app.clients.github import GitHubAPIError
 from app.config import Settings
 from app.core.session_jwt import issue_session_token
 from app.domain.datetime_github import parse_github_datetime
+from app.domain.github_oauth_scopes import parse_github_oauth_scopes
 from app.models.developer import Developer
 from app.repositories.developer import DeveloperRepository
 from app.services.github_oauth_service import GitHubOAuthService
+from app.services.score_sync_service import reset_sync_cooldown
 
 logger = logging.getLogger(__name__)
+
+
+def _oauth_scopes_from_token_payload(token_payload: dict[str, object]) -> str | None:
+    raw = token_payload.get("scope")
+    if not isinstance(raw, str):
+        return None
+    stripped = raw.strip()
+    return stripped or None
 
 
 class BadOAuthStateError(Exception):
@@ -59,8 +69,8 @@ class AuthService:
     ) -> None:
         self._oauth = oauth
 
-    def build_authorize_redirect_url(self, state: str) -> str:
-        return self._oauth.build_authorize_redirect_url(state)
+    def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
+        return self._oauth.build_authorize_redirect_url(state, prompt_consent=prompt_consent)
 
     async def complete_github_oauth(
         self,
@@ -77,6 +87,7 @@ class AuthService:
         access_token = token_payload.get("access_token")
         if not access_token or not isinstance(access_token, str):
             raise MissingGitHubAccessTokenError()
+        oauth_scopes = _oauth_scopes_from_token_payload(token_payload)
 
         try:
             profile = await self._oauth.fetch_authenticated_user(access_token)
@@ -106,6 +117,7 @@ class AuthService:
                 github_id=github_id,
                 github_login=login,
                 github_token=access_token,
+                github_oauth_scopes=oauth_scopes,
                 account_created_at=account_created_at,
                 last_sync_at=None,
                 created_at=now,
@@ -118,11 +130,20 @@ class AuthService:
 
         now = datetime.now(tz=UTC)
         updated = False
+        oauth_refresh = row.github_token != access_token or parse_github_oauth_scopes(
+            row.github_oauth_scopes
+        ) != parse_github_oauth_scopes(oauth_scopes)
         if row.github_login != login:
             row.github_login = login
             updated = True
         if row.github_token != access_token:
             row.github_token = access_token
+            updated = True
+        if row.github_oauth_scopes != oauth_scopes:
+            row.github_oauth_scopes = oauth_scopes
+            updated = True
+        if oauth_refresh:
+            reset_sync_cooldown(row, now=now)
             updated = True
         if updated:
             row.updated_at = now
@@ -137,6 +158,7 @@ class AuthService:
         code: str | None,
         state_query: str | None,
         state_cookie: str | None,
+        return_to: str | None,
         settings: Settings,
     ) -> GitHubOAuthCallbackResult:
         if oauth_error:
@@ -145,7 +167,10 @@ class AuthService:
             raise GitHubOAuthCallbackQueryError("Missing OAuth code or state")
 
         target = settings.effective_post_login_redirect
-        if not settings.is_redirect_url_allowed(target):
+        explicit_return = (return_to or "").strip()
+        if explicit_return and settings.is_redirect_url_allowed(explicit_return):
+            target = explicit_return
+        elif not settings.is_redirect_url_allowed(target):
             logger.error("Configured post-login redirect is not allowlisted: %s", target)
             raise OAuthRedirectConfigError()
 

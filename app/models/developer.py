@@ -21,6 +21,7 @@ class Developer(Base):
     github_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
     github_login: Mapped[str] = mapped_column(String(255), nullable=False)
     github_token: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+    github_oauth_scopes: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     commits_alltime: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     commits_breakdown_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

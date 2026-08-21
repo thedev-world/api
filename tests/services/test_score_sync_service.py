@@ -153,7 +153,7 @@ async def test_oauth_stub_row_last_sync_none_runs_full_backfill_not_incremental(
         assert out.first_sync is True
         assert out.progress is None
         assert out.snapshot.xp == oauth_row.xp_brut
-        gh.fetch_score_inputs.assert_awaited_once_with("ExampleUser")
+        gh.fetch_score_inputs.assert_awaited_once_with("ExampleUser", include_org_admin_repos=False)
         gh.contributions_totals_between.assert_not_called()
         repo.create.assert_not_called()
         assert oauth_row.commits_alltime == 2853
@@ -200,7 +200,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
     gh.with_token = MagicMock(return_value=gh)
     gh.contributions_totals_between = AsyncMock(return_value=(2, 0, 0, 0))
     gh.fetch_public_user_profile = AsyncMock(return_value=profile)
-    gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((3,), 0))
+    gh.fetch_owner_repo_star_fork_totals = AsyncMock(return_value=((3, 0, 0), 0))
     gh.commit_breakdown_sum_between = AsyncMock(return_value=2)
 
     svc = ScoreSyncService(gh)
@@ -228,6 +228,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         assert out.progress.xp_progress_after == out.snapshot.xp_progress
         assert row.commits_alltime == 2
         assert row.stars_received_raw == 3
+        assert row.owned_non_fork_repos_count == 3
         assert row.avatar_url == new_avatar
         gh.contributions_totals_between.assert_awaited_once_with(
             "carol",
@@ -241,6 +242,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         delta_stars = b.breakdown_after.from_stars - b.breakdown_before.from_stars
         delta_forks = b.breakdown_after.from_forks - b.breakdown_before.from_forks
         delta_followers = b.breakdown_after.from_followers - b.breakdown_before.from_followers
+        delta_repos = b.breakdown_after.from_repos - b.breakdown_before.from_repos
         delta_tenure = b.breakdown_after.from_tenure - b.breakdown_before.from_tenure
         assert delta_commits == 10
         assert delta_prs == 0
@@ -248,6 +250,7 @@ async def test_incremental_sync_updates_row_and_returns_progress() -> None:
         assert delta_stars == 150
         assert delta_forks == 0
         assert delta_followers == 0
+        assert delta_repos == 40
         assert delta_tenure == 0
         repo.create.assert_not_called()
         db.commit.assert_awaited_once()
@@ -404,7 +407,7 @@ async def test_sync_for_actor_uses_stored_token_when_present() -> None:
             await svc.sync_for_actor(db, github_id=123, login="alice")
 
         gh.with_token.assert_called_once_with("stored_token")
-        user_gh.fetch_score_inputs.assert_awaited_once_with("alice")
+        user_gh.fetch_score_inputs.assert_awaited_once_with("alice", include_org_admin_repos=True)
         user_gh.fetch_public_user_profile.assert_awaited_once_with("alice")
 
 
