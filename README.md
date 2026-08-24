@@ -118,7 +118,7 @@ flowchart TB
 ### Project structure
 
 ```text
-devplanet-api/
+thedevworld-api/
 ├── alembic/           # Database migrations and Alembic config
 ├── app/               # Main application code
 │   ├── main.py        # FastAPI entry point
@@ -240,7 +240,7 @@ All contributions must pass the existing test suite before being approved.
 5. Commit and push to your fork.
 6. Open a detailed Pull Request.
 
-To report a bug or request a feature, open an [Issue](https://github.com/thedev-world/devplanet-api/issues).
+To report a bug or request a feature, open an [Issue](https://github.com/thedev-world/api/issues).
 
 ## License
 
