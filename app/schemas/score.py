@@ -29,6 +29,17 @@ class XpProgressSchema(BaseModel):
     percent: int
 
 
+class NextCellUnlockSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unlock_xp: int
+    unlock_level: int
+    xp_remaining: int
+    in_current_level: bool
+    bar_percent: int | None
+    xp_in_level_at_unlock: int | None
+
+
 class PlayerClassSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

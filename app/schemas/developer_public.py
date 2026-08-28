@@ -6,9 +6,14 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.island import IslandChoice
-from app.domain.scoring import get_cell_count, get_player_class, get_xp_progress
+from app.domain.scoring import (
+    get_cell_count,
+    get_next_cell_unlock,
+    get_player_class,
+    get_xp_progress,
+)
 from app.models.developer import Developer
-from app.schemas.score import PlayerClassSchema, XpProgressSchema
+from app.schemas.score import NextCellUnlockSchema, PlayerClassSchema, XpProgressSchema
 from app.services.score_sync_service import SYNC_COOLDOWN
 
 
@@ -34,6 +39,7 @@ class DeveloperPublicResponse(BaseModel):
     xp_brut: int
     xp_progress: XpProgressSchema
     cell_count: int
+    next_cell_unlock: NextCellUnlockSchema | None
     player_class: PlayerClassSchema
     last_sync_at: datetime | None
     next_sync_at: datetime | None
@@ -42,6 +48,20 @@ class DeveloperPublicResponse(BaseModel):
     avatar_url: str | None
     created_at: datetime
     updated_at: datetime
+
+
+def _next_cell_unlock_schema(xp: int) -> NextCellUnlockSchema | None:
+    unlock = get_next_cell_unlock(xp)
+    if unlock is None:
+        return None
+    return NextCellUnlockSchema(
+        unlock_xp=unlock.unlock_xp,
+        unlock_level=unlock.unlock_level,
+        xp_remaining=unlock.xp_remaining,
+        in_current_level=unlock.in_current_level,
+        bar_percent=unlock.bar_percent,
+        xp_in_level_at_unlock=unlock.xp_in_level_at_unlock,
+    )
 
 
 def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
@@ -72,6 +92,7 @@ def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
             percent=prog.percent,
         ),
         cell_count=get_cell_count(row.xp_brut),
+        next_cell_unlock=_next_cell_unlock_schema(row.xp_brut),
         player_class=PlayerClassSchema(name=klass.name, phrase=klass.phrase),
         last_sync_at=row.last_sync_at,
         next_sync_at=row.last_sync_at + SYNC_COOLDOWN if row.last_sync_at else None,
