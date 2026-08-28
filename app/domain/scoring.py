@@ -219,6 +219,63 @@ def get_cell_count(xp: int) -> int:
     return _BASE_AT_LEVEL_50 + whale_bonus
 
 
+@dataclass(frozen=True, slots=True)
+class NextCellUnlock:
+    unlock_xp: int
+    unlock_level: int
+    xp_remaining: int
+    in_current_level: bool
+    bar_percent: int | None
+    xp_in_level_at_unlock: int | None
+
+
+def get_next_cell_unlock(xp: int) -> NextCellUnlock | None:
+    if xp < 0:
+        raise ValueError("xp cannot be negative")
+
+    current_cells = get_cell_count(xp)
+    max_xp = xp_for_level(_MAX_LEVEL + 1) - 1
+    if get_cell_count(max_xp) <= current_cells:
+        return None
+
+    lo = xp + 1
+    hi = max_xp + 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if get_cell_count(mid) > current_cells:
+            hi = mid
+        else:
+            lo = mid + 1
+
+    unlock_xp = lo
+    unlock_level = get_level(unlock_xp)
+    current_level = get_level(xp)
+    in_current_level = unlock_level == current_level
+
+    bar_percent: int | None = None
+    xp_in_level_at_unlock: int | None = None
+    if in_current_level:
+        prog = get_xp_progress(xp)
+        xp_floor = 0 if current_level == 1 else xp_for_level(current_level)
+        xp_in_level_at_unlock = unlock_xp - xp_floor
+        if prog.xp_needed > 0:
+            bar_percent = max(
+                0,
+                min(100, round(xp_in_level_at_unlock / prog.xp_needed * 100)),
+            )
+        else:
+            bar_percent = 100
+
+    return NextCellUnlock(
+        unlock_xp=unlock_xp,
+        unlock_level=unlock_level,
+        xp_remaining=unlock_xp - xp,
+        in_current_level=in_current_level,
+        bar_percent=bar_percent,
+        xp_in_level_at_unlock=xp_in_level_at_unlock,
+    )
+
+
 PLAYER_CLASSES_LIST: tuple[PlayerClass, ...] = (
     PlayerClass(
         slug="seedling",

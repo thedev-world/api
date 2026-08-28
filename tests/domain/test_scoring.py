@@ -3,9 +3,11 @@ from datetime import UTC, datetime
 import pytest
 from app.domain.github_inputs import GitHubScoreInputs
 from app.domain.scoring import (
+    _MAX_LEVEL,
     calculate_xp,
     get_cell_count,
     get_level,
+    get_next_cell_unlock,
     get_player_class,
     get_xp_progress,
     stars_after_single_repo_cap,
@@ -97,6 +99,31 @@ def test_cell_count_increases_with_xp_under_regime_below_fifty_level() -> None:
     xp_high = 1_281
     assert get_level(xp_low) <= 50
     assert get_cell_count(xp_high) >= get_cell_count(xp_low)
+
+
+def test_next_cell_unlock_from_zero_xp() -> None:
+    unlock = get_next_cell_unlock(0)
+    assert unlock is not None
+    assert unlock.in_current_level is True
+    assert unlock.bar_percent is not None
+    assert unlock.xp_in_level_at_unlock is not None
+    assert unlock.xp_in_level_at_unlock == unlock.unlock_xp
+    assert unlock.xp_remaining > 0
+
+
+def test_next_cell_unlock_beyond_current_level() -> None:
+    xp = xp_for_level(51)
+    unlock = get_next_cell_unlock(xp)
+    assert unlock is not None
+    assert unlock.in_current_level is False
+    assert unlock.bar_percent is None
+    assert unlock.xp_in_level_at_unlock is None
+    assert unlock.unlock_level == 52
+
+
+def test_next_cell_unlock_none_at_max_cells() -> None:
+    max_xp = xp_for_level(_MAX_LEVEL + 1) - 1
+    assert get_next_cell_unlock(max_xp) is None
 
 
 def test_private_contributions_xp_rate() -> None:
