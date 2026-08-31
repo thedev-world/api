@@ -69,8 +69,18 @@ class AuthService:
     ) -> None:
         self._oauth = oauth
 
-    def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
-        return self._oauth.build_authorize_redirect_url(state, prompt_consent=prompt_consent)
+    def build_authorize_redirect_url(
+        self,
+        state: str,
+        *,
+        prompt_consent: bool = False,
+        include_orgs: bool = False,
+    ) -> str:
+        return self._oauth.build_authorize_redirect_url(
+            state,
+            prompt_consent=prompt_consent,
+            include_orgs=include_orgs,
+        )
 
     async def complete_github_oauth(
         self,

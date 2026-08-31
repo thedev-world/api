@@ -13,9 +13,16 @@ from app.services.auth_service import AuthService, BadOAuthStateError
 @pytest.mark.asyncio
 async def test_github_oauth_start_redirect_and_state_cookie(api_client) -> None:
     class _Svc(AuthService):
-        def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
+        def build_authorize_redirect_url(
+            self,
+            state: str,
+            *,
+            prompt_consent: bool = False,
+            include_orgs: bool = False,
+        ) -> str:
             assert len(state) >= 8
             assert prompt_consent is False
+            assert include_orgs is False
             return "https://github.com/login/oauth/authorize?client_id=x"
 
     app.dependency_overrides[get_auth_service] = lambda: _Svc(oauth=MagicMock())
@@ -37,8 +44,15 @@ async def test_github_oauth_start_stores_return_to_and_prompt_consent(api_client
     seen: dict[str, object] = {}
 
     class _Svc(AuthService):
-        def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
+        def build_authorize_redirect_url(
+            self,
+            state: str,
+            *,
+            prompt_consent: bool = False,
+            include_orgs: bool = False,
+        ) -> str:
             seen["prompt_consent"] = prompt_consent
+            seen["include_orgs"] = include_orgs
             return "https://github.com/login/oauth/authorize?client_id=x"
 
     app.dependency_overrides[get_auth_service] = lambda: _Svc(oauth=MagicMock())
@@ -54,9 +68,40 @@ async def test_github_oauth_start_stores_return_to_and_prompt_consent(api_client
         )
         assert response.status_code == 302
         assert seen["prompt_consent"] is True
+        assert seen["include_orgs"] is False
         cookie_val = response.cookies.get("github_oauth_return_to")
         assert cookie_val is not None
         assert cookie_val.strip('"') == "http://localhost:3000/profile"
+    finally:
+        app.dependency_overrides.pop(get_auth_service, None)
+
+
+@pytest.mark.asyncio
+async def test_github_oauth_start_passes_include_orgs(api_client) -> None:
+    seen: dict[str, object] = {}
+
+    class _Svc(AuthService):
+        def build_authorize_redirect_url(
+            self,
+            state: str,
+            *,
+            prompt_consent: bool = False,
+            include_orgs: bool = False,
+        ) -> str:
+            _ = state
+            seen["include_orgs"] = include_orgs
+            return "https://github.com/login/oauth/authorize?client_id=x"
+
+    app.dependency_overrides[get_auth_service] = lambda: _Svc(oauth=MagicMock())
+
+    try:
+        response = await api_client.get(
+            "/api/v1/auth/github/start",
+            params={"include_orgs": "true"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert seen["include_orgs"] is True
     finally:
         app.dependency_overrides.pop(get_auth_service, None)
 

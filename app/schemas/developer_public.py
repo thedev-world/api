@@ -5,6 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.domain.github_oauth_scopes import has_github_org_oauth_scope
 from app.domain.island import IslandChoice
 from app.domain.scoring import (
     get_cell_count,
@@ -46,6 +47,7 @@ class DeveloperPublicResponse(BaseModel):
     island: IslandChoice | None
     is_onboarded: bool
     avatar_url: str | None
+    github_org_access_enabled: bool
     created_at: datetime
     updated_at: datetime
 
@@ -99,6 +101,7 @@ def developer_public_from_orm(row: Developer) -> DeveloperPublicResponse:
         island=IslandChoice(row.island) if row.island else None,
         is_onboarded=row.is_onboarded,
         avatar_url=row.avatar_url,
+        github_org_access_enabled=has_github_org_oauth_scope(row.github_oauth_scopes),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

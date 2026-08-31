@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.github import GitHubAPIError, GitHubClient
 from app.domain.datetime_github import parse_github_datetime
 from app.domain.github_inputs import GitHubScoreInputs
+from app.domain.github_oauth_scopes import has_github_org_oauth_scope
 from app.domain.github_profile import sync_avatar_url_from_profile
 from app.domain.score_snapshot import (
     GitHubPublicScoreSnapshot,
@@ -38,8 +39,10 @@ def reset_sync_cooldown(row: Developer, *, now: datetime) -> None:
 
 
 def _include_org_admin_repos(row: Developer | None) -> bool:
-    """Org repo stars require the developer's OAuth token (read:org)."""
-    return bool(row is not None and row.github_token)
+    """Org repo stars require the developer's OAuth token with read:org."""
+    return bool(
+        row is not None and row.github_token and has_github_org_oauth_scope(row.github_oauth_scopes)
+    )
 
 
 def _apply_commit_farm_fields(
