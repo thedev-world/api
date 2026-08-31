@@ -7,6 +7,7 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 
 from app.clients.github import GitHubAPIError
 from app.config import Settings
+from app.domain.github_oauth_scopes import github_oauth_scope_string
 
 
 class GitHubOAuthService:
@@ -18,11 +19,17 @@ class GitHubOAuthService:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def build_authorize_redirect_url(self, state: str, *, prompt_consent: bool = False) -> str:
+    def build_authorize_redirect_url(
+        self,
+        state: str,
+        *,
+        prompt_consent: bool = False,
+        include_orgs: bool = False,
+    ) -> str:
         client = AsyncOAuth2Client(
             client_id=self._settings.github_oauth_client_id,
             client_secret=self._settings.github_oauth_client_secret,
-            scope="read:user user:email read:org",
+            scope=github_oauth_scope_string(include_orgs=include_orgs),
         )
         extra: dict[str, str] = {}
         if prompt_consent:

@@ -1,6 +1,8 @@
 from app.domain.github_oauth_scopes import (
-    GITHUB_REAUTH_REQUIRED_DETAIL,
-    has_required_github_oauth_scopes,
+    BASE_GITHUB_OAUTH_SCOPES,
+    GITHUB_ORG_OAUTH_SCOPE,
+    github_oauth_scope_string,
+    has_github_org_oauth_scope,
     parse_github_oauth_scopes,
 )
 
@@ -17,11 +19,17 @@ def test_parse_github_oauth_scopes_splits_commas() -> None:
     )
 
 
-def test_has_required_github_oauth_scopes() -> None:
-    assert has_required_github_oauth_scopes("read:user,user:email,read:org") is True
-    assert has_required_github_oauth_scopes("read:user,user:email") is False
-    assert has_required_github_oauth_scopes(None) is False
+def test_has_github_org_oauth_scope() -> None:
+    assert has_github_org_oauth_scope("read:user,user:email,read:org") is True
+    assert has_github_org_oauth_scope("read:user,user:email") is False
+    assert has_github_org_oauth_scope(None) is False
 
 
-def test_github_reauth_required_detail_is_stable() -> None:
-    assert GITHUB_REAUTH_REQUIRED_DETAIL == "github_reauth_required"
+def test_base_github_oauth_scopes() -> None:
+    assert BASE_GITHUB_OAUTH_SCOPES == frozenset({"read:user", "user:email"})
+
+
+def test_github_oauth_scope_string() -> None:
+    assert github_oauth_scope_string(include_orgs=False) == "read:user user:email"
+    assert github_oauth_scope_string(include_orgs=True) == "read:user user:email read:org"
+    assert GITHUB_ORG_OAUTH_SCOPE == "read:org"

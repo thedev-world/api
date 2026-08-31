@@ -8,10 +8,6 @@ import jwt
 from app.config import Settings, get_settings
 from app.core.session_jwt import decode_session_token
 from app.database import get_db
-from app.domain.github_oauth_scopes import (
-    GITHUB_REAUTH_REQUIRED_DETAIL,
-    has_required_github_oauth_scopes,
-)
 from app.models.developer import Developer
 from app.repositories.developer import DeveloperRepository
 from fastapi import Depends, HTTPException, Request
@@ -56,10 +52,5 @@ async def get_current_developer(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User no longer exists",
-        )
-    if not has_required_github_oauth_scopes(dev.github_oauth_scopes):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=GITHUB_REAUTH_REQUIRED_DETAIL,
         )
     return dev

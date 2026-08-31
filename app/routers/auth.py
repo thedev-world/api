@@ -28,10 +28,15 @@ async def github_oauth_start(
     auth: Annotated[AuthService, Depends(get_auth_service)],
     return_to: str | None = None,
     prompt: str | None = None,
+    include_orgs: bool = False,
 ) -> RedirectResponse:
     state = secrets.token_urlsafe(32)
     prompt_consent = prompt == "consent"
-    location = auth.build_authorize_redirect_url(state, prompt_consent=prompt_consent)
+    location = auth.build_authorize_redirect_url(
+        state,
+        prompt_consent=prompt_consent,
+        include_orgs=include_orgs,
+    )
     response = RedirectResponse(url=location, status_code=status.HTTP_302_FOUND)
     set_oauth_state_cookie(response, state, settings)
     if return_to:

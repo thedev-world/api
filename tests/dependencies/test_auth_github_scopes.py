@@ -7,7 +7,6 @@ import pytest
 from app.config import get_settings
 from app.core.session_jwt import issue_session_token
 from app.dependencies.auth import get_current_developer
-from fastapi import HTTPException
 from tests.factories.developer_factory import make_developer
 
 
@@ -20,7 +19,7 @@ def _session_request(developer_id: UUID) -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_get_current_developer_requires_read_org_scope() -> None:
+async def test_get_current_developer_allows_basic_scopes() -> None:
     dev = make_developer(github_oauth_scopes="read:user,user:email")
     db = MagicMock()
     settings = get_settings()
@@ -31,11 +30,9 @@ async def test_get_current_developer_requires_read_org_scope() -> None:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr("app.dependencies.auth.DeveloperRepository", lambda _db: repo)
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_developer(request, db, settings)
+        result = await get_current_developer(request, db, settings)
 
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.detail == "github_reauth_required"
+    assert result is dev
 
 
 @pytest.mark.asyncio
@@ -56,7 +53,7 @@ async def test_get_current_developer_allows_read_org_scope() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_current_developer_rejects_null_scopes() -> None:
+async def test_get_current_developer_allows_null_scopes() -> None:
     dev = make_developer(github_oauth_scopes=None)
     db = MagicMock()
     settings = get_settings()
@@ -67,7 +64,6 @@ async def test_get_current_developer_rejects_null_scopes() -> None:
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr("app.dependencies.auth.DeveloperRepository", lambda _db: repo)
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_developer(request, db, settings)
+        result = await get_current_developer(request, db, settings)
 
-    assert exc_info.value.detail == "github_reauth_required"
+    assert result is dev
