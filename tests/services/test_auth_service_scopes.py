@@ -93,6 +93,42 @@ async def test_complete_github_oauth_resets_sync_cooldown_on_token_refresh() -> 
 
 
 @pytest.mark.asyncio
+async def test_complete_github_oauth_keeps_broader_scopes_on_re_signin() -> None:
+    oauth = AsyncMock(spec=GitHubOAuthService)
+    oauth.exchange_code_for_token = AsyncMock(
+        return_value={"access_token": "base-token", "scope": "read:user,user:email"}
+    )
+    oauth.fetch_authenticated_user = AsyncMock(
+        return_value={"id": 424242, "login": "testdev", "created_at": "2020-01-01T00:00:00Z"}
+    )
+
+    row = make_developer(
+        github_oauth_scopes="read:user,user:email,read:org",
+        github_token="org-token",
+    )
+    db = AsyncMock()
+    db.commit = AsyncMock()
+    repo = AsyncMock()
+    repo.get_by_github_id = AsyncMock(return_value=row)
+    repo.create = AsyncMock()
+
+    service = AuthService(oauth=oauth)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.services.auth_service.DeveloperRepository", lambda _db: repo)
+        result = await service.complete_github_oauth(
+            db,
+            code="code",
+            state_query="state",
+            state_cookie="state",
+        )
+
+    assert result.github_token == "org-token"
+    assert result.github_oauth_scopes == "read:user,user:email,read:org"
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_complete_github_oauth_resets_sync_cooldown_on_scope_change() -> None:
     oauth = AsyncMock(spec=GitHubOAuthService)
     oauth.exchange_code_for_token = AsyncMock(

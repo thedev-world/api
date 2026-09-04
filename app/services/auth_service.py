@@ -10,7 +10,7 @@ from app.clients.github import GitHubAPIError
 from app.config import Settings
 from app.core.session_jwt import issue_session_token
 from app.domain.datetime_github import parse_github_datetime
-from app.domain.github_oauth_scopes import parse_github_oauth_scopes
+from app.domain.github_oauth_scopes import is_oauth_scope_downgrade, parse_github_oauth_scopes
 from app.models.developer import Developer
 from app.repositories.developer import DeveloperRepository
 from app.services.github_oauth_service import GitHubOAuthService
@@ -140,18 +140,22 @@ class AuthService:
 
         now = datetime.now(tz=UTC)
         updated = False
-        oauth_refresh = row.github_token != access_token or parse_github_oauth_scopes(
-            row.github_oauth_scopes
-        ) != parse_github_oauth_scopes(oauth_scopes)
+        scope_downgrade = is_oauth_scope_downgrade(row.github_oauth_scopes, oauth_scopes)
+        oauth_refresh = not scope_downgrade and (
+            row.github_token != access_token
+            or parse_github_oauth_scopes(row.github_oauth_scopes)
+            != parse_github_oauth_scopes(oauth_scopes)
+        )
         if row.github_login != login:
             row.github_login = login
             updated = True
-        if row.github_token != access_token:
-            row.github_token = access_token
-            updated = True
-        if row.github_oauth_scopes != oauth_scopes:
-            row.github_oauth_scopes = oauth_scopes
-            updated = True
+        if not scope_downgrade:
+            if row.github_token != access_token:
+                row.github_token = access_token
+                updated = True
+            if row.github_oauth_scopes != oauth_scopes:
+                row.github_oauth_scopes = oauth_scopes
+                updated = True
         if oauth_refresh:
             reset_sync_cooldown(row, now=now)
             updated = True
