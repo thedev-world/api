@@ -14,6 +14,10 @@ def has_github_org_oauth_scope(scope: str | None) -> bool:
     return GITHUB_ORG_OAUTH_SCOPE in parse_github_oauth_scopes(scope)
 
 
+def is_oauth_scope_downgrade(stored: str | None, incoming: str | None) -> bool:
+    return parse_github_oauth_scopes(incoming) < parse_github_oauth_scopes(stored)
+
+
 def github_oauth_scope_string(*, include_orgs: bool) -> str:
     scopes = "read:user user:email"
     if include_orgs:
